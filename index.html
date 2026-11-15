@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#123c35">
+    <meta name="description" content="GalenoSV: plataforma digital para la atención clínica.">
+    <meta name="api-base-url" content="http://localhost:9080/Odontologia_SV-1.0-SNAPSHOT/api/v1/">
+    <meta name="api-endpoint-login" content="auth/login">
+    <meta name="api-endpoint-citas" content="citas/busqueda">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./assets/galeno.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./global.css">
+    <link rel="stylesheet" href="./styles.css">
+    <title>GalenoSV</title>
+  </head>
+  <body>
+    <galeno-app></galeno-app>
+
+    <template id="galeno-app-template">
+      <link rel="stylesheet" href="./styles.css">
+      <div class="spa-shell">
+        <header class="spa-header">
+          <a class="spa-brand" href="#/citas" aria-label="GalenoSV, inicio">
+            <img src="./assets/galeno.svg" alt="" width="34" height="34">
+            <span>Galeno<span class="brand-accent">SV</span></span>
+          </a>
+          <nav class="spa-nav" aria-label="Navegación principal">
+            <a href="#/citas">Buscar cita</a>
+            <a href="#/empleados/login">Portal empleados</a>
+            <a href="#/empleados/dashboard">Agenda</a>
+            <a href="#/personas">Personas</a>
+          </nav>
+          <div class="spa-actions">
+            <button class="button button-quiet button-small" id="install-app" type="button" hidden>Instalar app</button>
+            <button class="button button-quiet button-small" id="update-app" type="button" hidden>Actualizar app</button>
+          </div>
+        </header>
+
+        <main class="spa-main">
+          <galeno-router></galeno-router>
+        </main>
+
+        <footer class="spa-footer">
+          <span>GalenoSV · Atención clínica conectada</span>
+          <span id="connection-status" role="status" aria-live="polite">Verificando conexión…</span>
+        </footer>
+        <p id="app-announcement" class="sr-only" aria-live="polite"></p>
+      </div>
+    </template>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

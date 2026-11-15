@@ -1,0 +1,30 @@
+{
+  "name": "galenosv-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "nyc node tests/run-tests.mjs",
+    "test:node": "node --test tests/*.test.js",
+    "test:browser": "node tests/run-browser.mjs"
+  },
+  "devDependencies": {
+    "istanbul-lib-coverage": "^3.2.2",
+    "nyc": "^17.1.0",
+    "v8-to-istanbul": "^9.3.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
+  "nyc": {
+    "all": true,
+    "include": [
+      "src/**/*.js",
+      "service-worker.js"
+    ],
+    "reporter": [
+      "text",
+      "html"
+    ],
+    "report-dir": "coverage"
+  }
+}

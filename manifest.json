@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "GalenoSV · Sistema de gestión clínica",
+  "short_name": "GalenoSV",
+  "description": "Plataforma digital para la atención clínica.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7f5",
+  "theme_color": "#123c35",
+  "icons": [
+    {
+      "src": "./assets/galeno-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/galeno-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
