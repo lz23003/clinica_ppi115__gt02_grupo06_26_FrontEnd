@@ -16,6 +16,7 @@ class GalenoApp extends HTMLElement {
   }
 
   connectedCallback() {
+    this.#reloadForUpdate = Boolean(navigator.serviceWorker?.controller);
     this.shadowRoot.querySelector('#install-app').addEventListener('click', () => this.#install());
     this.shadowRoot.querySelector('#update-app').addEventListener('click', () => this.#activateUpdate());
     this.#updateConnectionStatus();

@@ -1,7 +1,7 @@
 import { enqueueOfflineRequest, flushOfflineQueue } from './src/offline-queue.js';
 import { fetchPublicAppointmentSearch } from './src/offline-strategies.js';
 
-const CACHE_NAME = 'galenosv-shell-v8';
+const CACHE_NAME = 'galenosv-shell-v13';
 const OFFLINE_FALLBACK_CACHE = 'galenosv-offline-v1';
 const PRIVATE_API_CACHE_PREFIX = 'galenosv-private-api-';
 const BACKEND_ORIGIN = 'http://localhost:9080';
@@ -34,7 +34,7 @@ const APP_SHELL = [
 ];
 const APP_SHELL_URLS = APP_SHELL.map((path) => new URL(path, self.registration.scope).href);
 const PUBLIC_APPOINTMENT_OFFLINE_KEY = new URL('./__offline__/public-appointment-search', self.registration.scope).href;
-const CACHEABLE_API_PATH = /\/api\/v1\/(clinicas|roles|examenes)\/all\/?$/;
+const CACHEABLE_API_PATH = /\/api\/v1\/(?:clinicas\/(?:all|activas)|roles\/all|examenes\/(?:all|activos))\/?$/;
 const OFFLINE_QUEUEABLE_PATH = /\/api\/v1\/consultas\/[^/]+\/?$/;
 
 self.addEventListener('install', (event) => {
@@ -50,6 +50,7 @@ self.addEventListener('install', (event) => {
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
       }),
     )),
+    self.skipWaiting?.(),
   ]));
 });
 
@@ -138,12 +139,12 @@ self.addEventListener('fetch', (event) => {
 });
 
 function isCacheableBackendGet(path) {
-  return /^(clinicas|roles|examenes)\/all\/?$/.test(path)
+  return /^(?:clinicas\/(?:all|activas)|roles\/all|examenes\/(?:all|activos))\/?$/.test(path)
     || /^consultas(?:\/[^/]+)?\/?$/.test(path);
 }
 
 async function getApiCacheName(request, apiPath) {
-  if (/^(clinicas|roles|examenes)\/all\/?$/.test(apiPath)) return CACHE_NAME;
+  if (/^(?:clinicas\/(?:all|activas)|roles\/all|examenes\/(?:all|activos))\/?$/.test(apiPath)) return CACHE_NAME;
   const authorization = request.headers.get('Authorization');
   if (!authorization?.startsWith('Bearer ')) return null;
   const digest = await crypto.subtle.digest(

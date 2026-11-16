@@ -40,8 +40,11 @@ describe('galeno-citas', () => {
   });
 
   it('loads clinics asynchronously and renders a successful appointment search', async () => {
-    fetchStub.callsFake((url) => new URL(url).pathname.endsWith('/clinicas/all')
-      ? jsonResponse([{ idClinica: 'clinic-1', nombre: 'Clínica Central' }])
+    fetchStub.callsFake((url) => new URL(url).pathname.endsWith('/clinicas/activas')
+      ? jsonResponse([
+        { idClinica: 'clinic-1', nombre: 'Clínica Central', activo: true },
+        { idClinica: 'clinic-inactive', nombre: 'Clínica cerrada', activo: false },
+      ])
       : jsonResponse([{
         idCita: 'appointment-1',
         fecha: today(),
@@ -53,10 +56,14 @@ describe('galeno-citas', () => {
 
     await waitFor(() => component.shadowRoot.querySelector('#clinic').options.length === 2);
     const root = component.shadowRoot;
+    expect([...root.querySelector('#clinic').options].map(({ textContent }) => textContent))
+      .to.deep.equal(['Selecciona una clínica', 'Clínica Central']);
     root.querySelector('#document-number').value = '01234567-8';
     root.querySelector('#clinic').value = 'clinic-1';
-    root.querySelector('#date-from').value = today();
-    root.querySelector('#date-to').value = today();
+    root.querySelector('#date-from').value = '2020-01-01';
+    root.querySelector('#date-to').value = '2020-01-31';
+    expect(root.querySelector('#date-from').min).to.equal('');
+    expect(root.querySelector('#date-to').min).to.equal('');
 
     const searchEvent = sinon.spy();
     const resultEvent = sinon.spy();
@@ -73,8 +80,8 @@ describe('galeno-citas', () => {
       tipoDocumento: 'DUI',
       numeroDocumento: '01234567-8',
       clinica: 'clinic-1',
-      desde: today(),
-      hasta: today(),
+      desde: '2020-01-01',
+      hasta: '2020-01-31',
     });
     expect(resultEvent.calledOnce).to.equal(true);
     expect(root.querySelector('#appointment-results cita-card')).not.to.equal(null);
@@ -82,7 +89,7 @@ describe('galeno-citas', () => {
   });
 
   it('rejects an inverted date range without calling the appointment endpoint', async () => {
-    fetchStub.resolves(jsonResponse([{ idClinica: 'clinic-1', nombre: 'Clínica Central' }]));
+    fetchStub.resolves(jsonResponse([{ idClinica: 'clinic-1', nombre: 'Clínica Central', activo: true }]));
     document.body.append(component);
     await waitFor(() => component.shadowRoot.querySelector('#clinic').options.length === 2);
 
@@ -110,7 +117,7 @@ describe('galeno-citas', () => {
 
     fetchStub.resetBehavior();
     fetchStub.resetHistory();
-    fetchStub.resolves(jsonResponse([{ idClinica: 'clinic-1', nombre: 'Clínica Central' }]));
+    fetchStub.resolves(jsonResponse([{ idClinica: 'clinic-1', nombre: 'Clínica Central', activo: true }]));
     component.remove();
     component = document.createElement('galeno-citas');
     document.body.append(component);

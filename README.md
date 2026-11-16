@@ -88,11 +88,11 @@ El ticket PDF de HU1 se genera en backend con Apache PDFBox. HU3 emite `atender-
 
 Esta sección prevalece sobre cualquier descripción anterior de datos simulados o descargas en cliente:
 
-- `/auth/login` debe devolver un JWT firmado por el backend. Configura `GALENOSV_JWT_SECRET` (mínimo 32 bytes) en el proceso del servidor; sin esa clave, el endpoint responde `503`.
+- `/auth/login` valida el DUI y devuelve un JWT de sesión firmado por el backend. No se requiere configuración adicional para probar en una instancia local: si `GALENOSV_JWT_SECRET` no está definida, el servidor genera una clave aleatoria al iniciar y las sesiones dejan de ser válidas al reiniciarlo. Para varias instancias se debe configurar la misma clave (mínimo 32 bytes) en todas.
 - El login valida el tipo y número de documento contra una asignación activa, tal como solicita HU2; no se agrega contraseña al flujo.
 - `GET /citas/{id}/ticket` genera el PDF en backend con Apache PDFBox. El frontend descarga su `Blob`, sin cargar librerías externas.
 - El diagnóstico de HU4 es texto libre: el frontend toma el valor del campo y lo envía en el historial JSON de `Consulta.observaciones`.
-- Los exámenes seleccionados se envían como `examenIds` a `PUT /consultas/{id}` y se guardan en la relación JPA `Consulta`–`Examen` (`consulta_examen`); las notas, diagnóstico y plan permanecen en el historial JSON de `Consulta.observaciones`.
+- Los exámenes seleccionados se envían como `examenIds` a `PUT /consultas/{id}` y se guardan junto al historial en el JSON de `Consulta.observaciones`; no requieren una tabla de relación adicional.
 - El service worker intercepta el host/contexto local configurado en `service-worker.js`. Las lecturas de consultas se cachean con Network First y por token; se borran al cerrar sesión o al iniciar una nueva. En dispositivos compartidos, los datos clínicos offline siguen requiriendo cifrado y una política de retención antes de producción.
 
 ## Pruebas
@@ -105,4 +105,4 @@ npm test
 
 La búsqueda pública de citas necesita conexión: si falla por red, el Service Worker devuelve un error HTTP 503 con un mensaje claro y no guarda una consulta de búsqueda para sincronizar. El dashboard envía `idClinica`, `idRol`, `desde` y `hasta` al REST; cuando recibe un rango, el backend devuelve todas las consultas coincidentes sin el límite paginado general.
 
-La tabla puente de exámenes debe crearse en PostgreSQL aplicando una vez [V2__consulta_examen.sql](../main/resources/db/migration/V2__consulta_examen.sql). No se utiliza `import.sql`.
+La aplicación no requiere una tabla puente para relacionar exámenes con consultas. Los IDs seleccionados se almacenan en `Consulta.observaciones`, sin modificar el esquema de PostgreSQL.

@@ -159,6 +159,53 @@ describe('apiService browser suite', () => {
     expect(url.searchParams.has('max')).to.equal(false);
   });
 
+  it('parses backend zoned timestamps and uses the clinic local date for dashboard consultations', async () => {
+    fetchStub.resolves(jsonResponse([{
+      idConsulta: 'test-zoned-consultation',
+      fechaInicio: '2026-11-16T14:00:00Z[UTC]',
+      idPersonaRol: {
+        idPersona: { idPersona: 'person-1', nombres: 'Elena', apellidos: 'Martínez' },
+        idClinica: { idClinica: 'clinic-1', nombre: 'Flor Blanca' },
+        idRol: { idRol: 'role-1', nombre: 'Doctor' },
+      },
+    }]));
+
+    const [consultation] = await apiService.obtenerConsultasDashboard(
+      'clinic-1',
+      'role-1',
+      { desde: '2026-11-16', hasta: '2026-11-18' },
+    );
+
+    expect(consultation.fecha).to.equal('2026-11-16');
+  });
+
+  it('resolves a stored step author from the authenticated employee ID', async () => {
+    sessionStorage.setItem('galenosv.employee', JSON.stringify({
+      id: 'employee-1',
+      nombres: 'Elena',
+      apellidos: 'Martínez',
+      assignments: [],
+    }));
+    fetchStub.resolves(jsonResponse([{
+      idConsulta: 'test-authored-consultation',
+      fechaInicio: '2026-11-16T14:00:00Z[UTC]',
+      observaciones: JSON.stringify({
+        historial: [{
+          paso: 'Triaje',
+          idRealizadoPor: 'employee-1',
+          guardadoEn: '2026-11-16T14:00:00Z[UTC]',
+        }],
+      }),
+      idPersonaRol: {
+        idPersona: { idPersona: 'person-1', nombres: 'Elena', apellidos: 'Martínez' },
+      },
+    }]));
+
+    const [consultation] = await apiService.obtenerConsultasDashboard('clinic-1', 'role-1');
+
+    expect(consultation.pasosPrevios[0].realizadoPor).to.equal('Elena Martínez');
+  });
+
   it('sends selected exam IDs in the consultation update instead of saving exam objects in notes', async () => {
     const consultation = {
       id: 'consultation-1',
@@ -192,6 +239,7 @@ describe('apiService browser suite', () => {
     expect(new URL(url).pathname).to.match(/\/consultas\/consultation-1$/);
     expect(options.method).to.equal('PUT');
     expect(payload.examenIds).to.deep.equal(['exam-1']);
+    expect(JSON.parse(payload.observaciones).examenIds).to.deep.equal(['exam-1']);
     expect(savedHistory.diagnostico).to.equal('Caries dental no especificada');
     expect(savedHistory.realizadoPor).to.equal('Elena Martínez');
     expect(new Date(savedHistory.guardadoEn).toString()).not.to.equal('Invalid Date');
@@ -264,9 +312,10 @@ describe('apiService browser suite', () => {
 
   it('maps exam catalog variants and rejects invalid catalog response shapes', async () => {
     fetchStub.onFirstCall().resolves(jsonResponse([
-      { idExamen: 'xray', nombre: 'Radiografía dental', descripcion: 'Imagen' },
-      { idTipoExamen: 'blood', nombreExamen: 'Hemograma', observaciones: 'Laboratorio' },
-      { id: 'other', descripcion: 'Prueba general', categoria: 'laboratorio' },
+      { idExamen: 'xray', nombre: 'Radiografía dental', descripcion: 'Imagen', activo: true },
+      { idTipoExamen: 'blood', nombreExamen: 'Hemograma', observaciones: 'Laboratorio', activo: true },
+      { id: 'other', descripcion: 'Prueba general', categoria: 'laboratorio', activo: true },
+      { idExamen: 'inactive', nombre: 'Examen inactivo', activo: false },
     ]));
     const exams = await apiService.obtenerExamenes();
     expect(exams.map(({ id, name, category }) => [id, name, category])).to.deep.equal([

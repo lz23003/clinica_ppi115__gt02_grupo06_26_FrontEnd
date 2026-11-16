@@ -15,13 +15,22 @@ const localToday = () => {
 };
 const displayDate = (value, includeTime = false) => {
   if (!value) return '—';
-  const date = new Date(value);
+  const dateValue = typeof value === 'string'
+    ? value.replace(/\[[^\]]+\]$/, '')
+    : value;
+  const normalizedDate = typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+    ? `${dateValue}T00:00:00`
+    : dateValue;
+  const date = new Date(normalizedDate);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('es-SV', {
     dateStyle: 'medium',
     ...(includeTime ? { timeStyle: 'short' } : {}),
   }).format(date);
 };
+const personDate = (persona, field) => persona[field]
+  ?? persona[field.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)]
+  ?? (field === 'fechaCreacion' ? persona.fechaRegistro ?? persona.fecha_registro : undefined);
 const initials = (persona) => `${persona.nombres?.trim()?.[0] ?? ''}${persona.apellidos?.trim()?.[0] ?? ''}` || 'P';
 const template = document.createElement('template');
 template.innerHTML = `
@@ -38,14 +47,6 @@ template.innerHTML = `
         <button class="button button-primary" id="new-person-button" type="button">＋ Nueva persona</button>
       </div>
     </div>
-    <section class="stat-grid" aria-label="Resumen">
-      <article class="stat-card"><span class="stat-icon stat-icon-green" aria-hidden="true">♙</span>
-        <div><p class="stat-label">Personas registradas</p><p class="stat-value" id="total-count">—</p></div>
-      </article>
-      <article class="stat-card"><span class="stat-icon stat-icon-blue" aria-hidden="true">⌕</span>
-        <div><p class="stat-label">En esta página</p><p class="stat-value" id="page-count">—</p></div>
-      </article>
-    </section>
     <section class="card directory-card" aria-labelledby="directory-title">
       <div class="card-heading">
         <div><h2 id="directory-title">Directorio de personas</h2><p class="muted">Consulta y actualiza los registros de la clínica.</p></div>
@@ -197,10 +198,6 @@ class PersonaApp extends HTMLElement {
   #render() {
     if (!this.shadowRoot) return;
     const root = this.shadowRoot;
-    root.querySelector('#total-count').textContent = this.#state.total.toLocaleString('es-SV');
-    root.querySelector('#page-count').textContent = this.#state.loading
-      ? '…'
-      : this.#state.visible.length.toLocaleString('es-SV');
     root.querySelector('#previous-page').disabled = this.#state.loading || this.#state.first === 0;
     root.querySelector('#next-page').disabled = this.#state.loading
       || this.#state.first + this.#state.max >= this.#state.total;
@@ -251,11 +248,11 @@ class PersonaApp extends HTMLElement {
       const birth = document.createElement('td');
       const birthPill = document.createElement('span');
       birthPill.className = 'date-pill';
-      birthPill.textContent = displayDate(persona.fechaNacimiento);
+      birthPill.textContent = displayDate(personDate(persona, 'fechaNacimiento'));
       birth.append(birthPill);
 
       const created = document.createElement('td');
-      created.textContent = displayDate(persona.fechaCreacion, true);
+      created.textContent = displayDate(personDate(persona, 'fechaCreacion'), true);
 
       const actions = document.createElement('td');
       const buttons = document.createElement('div');
@@ -303,7 +300,7 @@ class PersonaApp extends HTMLElement {
     this.shadowRoot.querySelector('#first-name').value = persona?.nombres ?? '';
     this.shadowRoot.querySelector('#last-name').value = persona?.apellidos ?? '';
     const birthDate = this.shadowRoot.querySelector('#birth-date');
-    birthDate.value = dateOnly(persona?.fechaNacimiento);
+    birthDate.value = dateOnly(persona && personDate(persona, 'fechaNacimiento'));
     birthDate.disabled = Boolean(persona);
     this.shadowRoot.querySelector('#person-form-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
     this.shadowRoot.querySelector('#first-name').focus();
@@ -331,7 +328,7 @@ class PersonaApp extends HTMLElement {
       apellidos: this.shadowRoot.querySelector('#last-name').value.trim(),
       fechaNacimiento: `${date}T12:00:00.000Z`,
       fechaCreacion: this.#state.editing
-        ? this.#state.selected.fechaCreacion
+        ? personDate(this.#state.selected, 'fechaCreacion')
         : new Date().toISOString(),
     };
     if (!persona.nombres || !persona.apellidos) {

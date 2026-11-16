@@ -7,8 +7,8 @@ const API_ENDPOINTS = Object.freeze(Object.fromEntries(
     login: 'auth/login',
     citas: 'citas/busqueda',
     consultas: 'consultas',
-    examenes: 'examenes/all',
-    clinicas: 'clinicas/all',
+    examenes: 'examenes/activos',
+    clinicas: 'clinicas/activas',
     roles: 'roles/all',
     personas: 'personas',
     ticket: 'citas',
@@ -277,7 +277,7 @@ export const apiService = Object.freeze({
   async obtenerExamenes() {
     const { body } = await this.request(API_ENDPOINTS.examenes);
     if (!Array.isArray(body)) throw new ApiServiceError('El servicio de exámenes devolvió un formato inesperado.');
-    return body.map((examen) => ({
+    return body.filter((examen) => examen.activo === true).map((examen) => ({
       ...examen,
       id: examen.idExamen || examen.id || examen.idTipoExamen,
       name: examen.nombre || examen.descripcion || examen.nombreExamen || 'Examen',
@@ -292,7 +292,7 @@ export const apiService = Object.freeze({
   async obtenerClinicas() {
     const { body } = await this.request(API_ENDPOINTS.clinicas);
     if (!Array.isArray(body)) throw new ApiServiceError('El servicio de clínicas devolvió un formato inesperado.');
-    return body;
+    return body.filter((clinica) => clinica.activo === true);
   },
 
   async obtenerRoles() {
@@ -315,16 +315,26 @@ export const apiService = Object.freeze({
       consultation = body;
     }
 
-    let attendanceHistory = [];
+    let observationData = {};
     if (consultation.observaciones) {
       try {
         const previous = JSON.parse(consultation.observaciones);
-        if (Array.isArray(previous.historial)) attendanceHistory = previous.historial;
-        else attendanceHistory = [{ paso: 'Registro anterior', notas: consultation.observaciones }];
+        if (previous && typeof previous === 'object' && !Array.isArray(previous)) {
+          observationData = previous;
+        } else {
+          observationData = {
+            historial: [{ paso: 'Registro anterior', notas: consultation.observaciones }],
+          };
+        }
       } catch {
-        attendanceHistory = [{ paso: 'Registro anterior', notas: consultation.observaciones }];
+        observationData = {
+          historial: [{ paso: 'Registro anterior', notas: consultation.observaciones }],
+        };
       }
     }
+    let attendanceHistory = Array.isArray(observationData.historial)
+      ? observationData.historial
+      : [];
     attendanceHistory = attendanceHistory.filter((entry) => entry && typeof entry === 'object');
     const employee = readStoredEmployee();
     const employeeName = [employee?.nombres, employee?.apellidos]
@@ -343,12 +353,17 @@ export const apiService = Object.freeze({
     if (previousStepIndex >= 0) attendanceHistory[previousStepIndex] = newEntry;
     else attendanceHistory.push(newEntry);
 
+    const examIds = (datosConsulta.examenes || [])
+      .map((exam) => typeof exam === 'string' ? exam : exam.id)
+      .filter(Boolean);
     const body = {
       idConsulta: id,
-      observaciones: JSON.stringify({ historial: attendanceHistory }),
-      examenIds: (datosConsulta.examenes || [])
-        .map((exam) => typeof exam === 'string' ? exam : exam.id)
-        .filter(Boolean),
+      observaciones: JSON.stringify({
+        ...observationData,
+        historial: attendanceHistory,
+        examenIds: examIds,
+      }),
+      examenIds: examIds,
       ...(datosConsulta.finalizar ? { fechaFin: new Date().toISOString() } : {}),
     };
     const { body: saved } = await this.request(`consultas/${encodeURIComponent(id)}`, {
@@ -434,13 +449,33 @@ const getPreviousSteps = (consulta) => {
   try {
     const parsed = JSON.parse(consulta.observaciones);
     if (Array.isArray(parsed.historial)) {
-      return parsed.historial.filter((entry) => entry && typeof entry === 'object').map((entry) => ({
-        nombre: entry.paso || entry.nombre || 'Paso sin nombre',
-        realizadoPor: entry.realizadoPor || '',
-        completado: Boolean(entry.completado ?? entry.guardadoEn),
-        ...(entry.guardadoEn ? { guardadoEn: entry.guardadoEn } : {}),
-        ...(entry.notas ? { notas: entry.notas } : {}),
-      }));
+      const employee = readStoredEmployee();
+      const employeeName = [employee?.nombres, employee?.apellidos]
+        .filter((name) => typeof name === 'string' && name.trim())
+        .join(' ');
+      return parsed.historial
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry) => {
+          const nestedAuthor = entry.empleado || entry.autor || entry.idPersonaRol?.idPersona;
+          const nestedAuthorName = nestedAuthor && typeof nestedAuthor === 'object'
+            ? [nestedAuthor.nombres, nestedAuthor.apellidos]
+              .filter((name) => typeof name === 'string' && name.trim())
+              .join(' ')
+            : '';
+          const sameEmployee = entry.idRealizadoPor
+            && employee?.id
+            && String(entry.idRealizadoPor) === String(employee.id);
+          return {
+            nombre: entry.paso || entry.nombre || 'Paso sin nombre',
+            realizadoPor: entry.realizadoPor
+              || entry.nombreEmpleado
+              || nestedAuthorName
+              || (sameEmployee ? employeeName : ''),
+            completado: Boolean(entry.completado ?? entry.guardadoEn),
+            ...(entry.guardadoEn ? { guardadoEn: entry.guardadoEn } : {}),
+            ...(entry.notas ? { notas: entry.notas } : {}),
+          };
+        });
     }
   } catch {
     return [{
@@ -458,14 +493,30 @@ const adaptConsulta = (consulta) => {
   const person = personRole.idPersona || {};
   const clinic = personRole.idClinica || {};
   const role = personRole.idRol || {};
-  const start = consulta.fechaInicio ? new Date(consulta.fechaInicio) : null;
+  const dateValue = typeof consulta.fechaInicio === 'string'
+    ? consulta.fechaInicio.replace(/\[[^\]]+\]$/, '')
+    : consulta.fechaInicio;
+  const start = dateValue ? new Date(dateValue) : null;
   const validStart = start && !Number.isNaN(start.getTime());
-  const iso = validStart ? start.toISOString() : '';
+  const localDate = validStart
+    ? Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/El_Salvador',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(start).map(({ type, value }) => [type, value]))
+    : null;
 
   return {
     id: consulta.idConsulta,
-    fecha: iso.slice(0, 10),
-    hora: validStart ? new Intl.DateTimeFormat('es-SV', { hour: '2-digit', minute: '2-digit' }).format(start) : 'Pendiente',
+    fecha: localDate ? `${localDate.year}-${localDate.month}-${localDate.day}` : '',
+    hora: validStart
+      ? new Intl.DateTimeFormat('es-SV', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'America/El_Salvador',
+      }).format(start)
+      : 'Pendiente',
     tipo: consulta.referenciaExterna || 'Consulta médica',
     paciente: {
       nombres: person.nombres || 'Paciente',

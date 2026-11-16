@@ -69,19 +69,42 @@ const localDateString = (date = new Date()) => {
 };
 
 const formatDateTime = (value) => {
-  const date = new Date(value);
+  const dateValue = typeof value === 'string' ? value.replace(/\[[^\]]+\]$/, '') : value;
+  const date = new Date(dateValue);
   return Number.isNaN(date.getTime())
     ? 'Fecha no disponible'
-    : new Intl.DateTimeFormat('es-SV', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+    : new Intl.DateTimeFormat('es-SV', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/El_Salvador',
+    }).format(date);
+};
+
+const getDateParts = (value) => {
+  if (typeof value !== 'string' || !value) return null;
+  const normalized = value.replace(/\[[^\]]+\]$/, '');
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+  if (dateOnly) {
+    return { year: Number(dateOnly[1]), month: Number(dateOnly[2]), day: Number(dateOnly[3]) };
+  }
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/El_Salvador',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).map(({ type, value: part }) => [type, part]));
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) };
 };
 
 const getAge = (birthDate) => {
-  const birth = new Date(`${birthDate}T00:00:00`);
-  if (Number.isNaN(birth.getTime())) return 'Edad no disponible';
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const beforeBirthday = today.getMonth() < birth.getMonth()
-    || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+  const birth = getDateParts(birthDate);
+  if (!birth) return 'Edad no disponible';
+  const todayParts = getDateParts(localDateString());
+  let age = todayParts.year - birth.year;
+  const beforeBirthday = todayParts.month < birth.month
+    || (todayParts.month === birth.month && todayParts.day < birth.day);
   if (beforeBirthday) age -= 1;
   return `${age} años`;
 };
@@ -151,7 +174,7 @@ class DashboardConsultaCard extends HTMLElement {
       const completedBy = document.createElement('span');
       completedBy.className = 'step-person';
       completedBy.textContent = step.completado
-        ? `Realizado por ${step.realizadoPor || 'Autor no disponible'}${step.guardadoEn ? ` · ${formatDateTime(step.guardadoEn)}` : ''}`
+        ? `Realizado por ${step.realizadoPor || 'Autor no registrado'}${step.guardadoEn ? ` · ${formatDateTime(step.guardadoEn)}` : ''}`
         : 'Pendiente';
       item.append(name, completedBy);
       if (step.notas) {
@@ -287,6 +310,8 @@ class GalenoDashboard extends HTMLElement {
     this.#loadContextOptions();
     root.querySelector('#date-from').value = this.#state.dateFrom;
     root.querySelector('#date-to').value = this.#state.dateTo;
+    root.querySelector('#date-from').max = this.#state.dateTo;
+    root.querySelector('#date-to').min = this.#state.dateFrom;
     root.querySelector('#logout').addEventListener('click', () => {
       this.dispatchEvent(new CustomEvent('cerrar-sesion', { bubbles: true, composed: true }));
     });
@@ -305,12 +330,22 @@ class GalenoDashboard extends HTMLElement {
     });
     root.querySelector('#date-from').addEventListener('change', ({ currentTarget }) => {
       this.#state.dateFrom = currentTarget.value;
-      root.querySelector('#date-to').min = currentTarget.value;
+      const dateTo = root.querySelector('#date-to');
+      dateTo.min = currentTarget.value;
+      if (currentTarget.value && dateTo.value && currentTarget.value > dateTo.value) {
+        dateTo.value = currentTarget.value;
+        this.#state.dateTo = dateTo.value;
+      }
       if (this.#state.loaded) void this.#loadConsultations();
     });
     root.querySelector('#date-to').addEventListener('change', ({ currentTarget }) => {
       this.#state.dateTo = currentTarget.value;
-      root.querySelector('#date-from').max = currentTarget.value;
+      const dateFrom = root.querySelector('#date-from');
+      dateFrom.max = currentTarget.value;
+      if (currentTarget.value && dateFrom.value && currentTarget.value < dateFrom.value) {
+        dateFrom.value = currentTarget.value;
+        this.#state.dateFrom = dateFrom.value;
+      }
       if (this.#state.loaded) void this.#loadConsultations();
     });
     root.querySelector('#consultation-list').addEventListener('atender-consulta', (event) => {
@@ -325,7 +360,9 @@ class GalenoDashboard extends HTMLElement {
 
   #loadContextOptions() {
     this.#assignments = apiService.getEmployeeAssignments()
-      .filter((assignment) => assignment?.idClinica && assignment?.idRol);
+      .filter((assignment) => assignment?.idClinica
+        && assignment?.idRol
+        && normalizeText(assignment.rol) !== 'paciente');
     if (this.#assignments.length === 0) {
       this.#state.error = 'No se encontraron asignaciones activas. Cierra sesión e inicia nuevamente.';
       return;
@@ -360,6 +397,10 @@ class GalenoDashboard extends HTMLElement {
   async #loadConsultations() {
     if (!this.#state.clinic || !this.#state.role) {
       this.#state.error = 'Selecciona una clínica y un rol antes de cargar las consultas.';
+      return;
+    }
+    if (this.#state.dateFrom && this.#state.dateTo && this.#state.dateFrom > this.#state.dateTo) {
+      this.#state.error = 'La fecha inicial debe ser anterior o igual a la fecha final.';
       return;
     }
     const hasAssignment = this.#assignments.some((assignment) => (

@@ -59,7 +59,7 @@ describe('Web Components browser suite', () => {
 
   it('loads the consultation identified in the SPA route and fetches its exams', async () => {
     const consultationId = 'b8620000-0000-4000-8000-000000000001';
-    fetchStub.callsFake((url) => new URL(url).pathname.endsWith('/examenes/all')
+    fetchStub.callsFake((url) => new URL(url).pathname.endsWith('/examenes/activos')
       ? jsonResponse([])
       : jsonResponse({
         idConsulta: consultationId,
@@ -94,7 +94,7 @@ describe('Web Components browser suite', () => {
     const consultationId = 'b8620000-0000-4000-8000-000000000002';
     fetchStub.callsFake((url, options = {}) => {
       const path = new URL(url).pathname;
-      if (path.endsWith('/examenes/all')) return jsonResponse([]);
+      if (path.endsWith('/examenes/activos')) return jsonResponse([]);
       if (path.endsWith(`/consultas/${consultationId}`) && options.method !== 'PUT') {
         return jsonResponse({
           idConsulta: consultationId,
@@ -148,13 +148,22 @@ describe('Web Components browser suite', () => {
       id: 'employee-1',
       nombres: 'Elena',
       apellidos: 'Martínez',
-      assignments: [{
-        idPersonaRol: 'assignment-1',
-        idClinica: 'clinic-1',
-        clinica: 'Clínica Central',
-        idRol: 'role-1',
-        rol: 'Médico',
-      }],
+      assignments: [
+        {
+          idPersonaRol: 'assignment-1',
+          idClinica: 'clinic-1',
+          clinica: 'Clínica Central',
+          idRol: 'role-1',
+          rol: 'Médico',
+        },
+        {
+          idPersonaRol: 'assignment-patient',
+          idClinica: 'clinic-1',
+          clinica: 'Clínica Central',
+          idRol: 'role-patient',
+          rol: 'Páciente',
+        },
+      ],
     }));
     const records = [
       { idConsulta: 'before', fechaInicio: '2026-06-30T12:00:00Z' },
@@ -198,6 +207,14 @@ describe('Web Components browser suite', () => {
     root.querySelector('#clinic-select').value = 'clinic-1';
     root.querySelector('#clinic-select').dispatchEvent(new Event('change'));
     expect(root.querySelector('#role-select').options.length).to.equal(2);
+    expect([...root.querySelector('#role-select').options].map(({ textContent }) => textContent))
+      .to.deep.equal(['Selecciona un rol', 'Médico']);
+    root.querySelector('#date-from').value = '2099-12-31';
+    root.querySelector('#date-from').dispatchEvent(new Event('change'));
+    expect(root.querySelector('#date-to').value).to.equal('2099-12-31');
+    root.querySelector('#date-to').value = '2026-07-02';
+    root.querySelector('#date-to').dispatchEvent(new Event('change'));
+    expect(root.querySelector('#date-from').value).to.equal('2026-07-02');
     root.querySelector('#role-select').value = 'role-1';
     root.querySelector('#role-select').dispatchEvent(new Event('change'));
     root.querySelector('#date-from').value = '2026-06-30';
@@ -239,7 +256,7 @@ describe('Web Components browser suite', () => {
     expect(filteredRequestUrl.searchParams.get('hasta')).to.equal('2026-07-01');
   });
 
-  it('renders the stored author, timestamp, and notes for completed dashboard steps', () => {
+  it('toggles the dashboard record and renders age, author, timestamp, and notes', () => {
     const card = document.createElement('dashboard-consulta-card');
     card.consulta = {
       id: 'consultation-history',
@@ -250,7 +267,7 @@ describe('Web Components browser suite', () => {
         id: 'person-1',
         nombres: 'Elena',
         apellidos: 'Martínez',
-        fechaNacimiento: '1990-01-01',
+        fechaNacimiento: '1985-06-12T06:00:00Z[UTC]',
       },
       pasosPrevios: [{
         nombre: 'Triaje',
@@ -261,7 +278,14 @@ describe('Web Components browser suite', () => {
       }],
     };
     document.body.append(card);
-    card.shadowRoot.querySelector('#view-record').click();
+    const recordButton = card.shadowRoot.querySelector('#view-record');
+    const history = card.shadowRoot.querySelector('#step-history');
+    expect(history.hidden).to.equal(true);
+    expect(card.shadowRoot.querySelector('#patient-identity').textContent).to.include('41 años');
+
+    recordButton.click();
+    expect(history.hidden).to.equal(false);
+    expect(recordButton.textContent).to.equal('Ocultar Registro');
 
     expect(card.shadowRoot.querySelector('.step-person').textContent)
       .to.include('Realizado por Elena Martínez');
@@ -269,6 +293,10 @@ describe('Web Components browser suite', () => {
       .not.to.include('Fecha no disponible');
     expect(card.shadowRoot.querySelector('.step-notes').textContent)
       .to.equal('Signos vitales registrados.');
+
+    recordButton.click();
+    expect(history.hidden).to.equal(true);
+    expect(recordButton.textContent).to.equal('Ver Registro');
   });
 
   it('auto-saves the current step before moving to the previous step', async () => {
@@ -291,7 +319,7 @@ describe('Web Components browser suite', () => {
     };
     fetchStub.callsFake((url, options = {}) => {
       const path = new URL(url).pathname;
-      if (path.endsWith('/examenes/all')) return jsonResponse([]);
+      if (path.endsWith('/examenes/activos')) return jsonResponse([]);
       if (options.method === 'PUT') return jsonResponse({ idConsulta: consultationId });
       return jsonResponse(consultationRecord);
     });
@@ -353,10 +381,10 @@ describe('Web Components browser suite', () => {
     };
     fetchStub.callsFake((url, options = {}) => {
       const path = new URL(url).pathname;
-      if (path.endsWith('/examenes/all')) {
+      if (path.endsWith('/examenes/activos')) {
         return jsonResponse([
-          { idExamen: 'exam-image', nombre: 'Radiografía', categoria: 'imagen' },
-          { idExamen: 'exam-lab', nombre: 'Hemograma', categoria: 'laboratorio' },
+          { idExamen: 'exam-image', nombre: 'Radiografía', categoria: 'imagen', activo: true },
+          { idExamen: 'exam-lab', nombre: 'Hemograma', categoria: 'laboratorio', activo: true },
         ]);
       }
       if (options.method === 'PUT') {

@@ -72,8 +72,8 @@ describe('persona-app directory', () => {
       idPersona: 'person-1',
       nombres: 'Elena',
       apellidos: 'Álvarez',
-      fechaNacimiento: '1990-04-03',
-      fechaCreacion: '2026-01-02T10:00:00Z',
+      fechaNacimiento: '1990-04-03T06:00:00Z[UTC]',
+      fechaCreacion: '2026-01-02T10:00:00Z[UTC]',
     }];
     fetchStub.callsFake((url, options = {}) => {
       const requestUrl = new URL(url);
@@ -116,10 +116,14 @@ describe('persona-app directory', () => {
   it('loads records and filters the current page by accented name', async () => {
     document.body.append(component);
     await waitFor(() => component.shadowRoot.querySelector('#people-body tr .person-name'));
-    expect(component.shadowRoot.querySelector('#total-count').textContent).to.equal('1');
-    expect(component.shadowRoot.querySelector('#page-count').textContent).to.equal('1');
+    const root = component.shadowRoot;
+    expect(root.querySelector('#people-body tr').children[1].textContent).to.equal('3 abr 1990');
+    expect(root.querySelector('#people-body tr').children[2].textContent).to.include('2 ene 2026');
+    expect(root.querySelector('.stat-grid')).to.equal(null);
+    expect(root.textContent).not.to.include('Personas registradas');
+    expect(root.textContent).not.to.include('En esta página');
 
-    const search = component.shadowRoot.querySelector('#search-input');
+    const search = root.querySelector('#search-input');
     search.value = 'alvarez';
     search.dispatchEvent(new Event('input'));
     await waitFor(() => component.shadowRoot.querySelector('#people-body .person-name')?.textContent
@@ -162,7 +166,7 @@ describe('persona-app directory', () => {
       bubbles: true,
       cancelable: true,
     }));
-    await waitFor(() => root.querySelector('#total-count').textContent === '2');
+    await waitFor(() => root.querySelectorAll('#people-body tr .person-name').length === 2);
     expect(root.querySelector('#status-message').textContent)
       .to.equal('La persona se registró correctamente.');
     expect(fetchStub.args.some(([, options]) => options?.method === 'POST')).to.equal(true);

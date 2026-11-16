@@ -43,6 +43,8 @@ describe('PWA Service Worker', () => {
     const sandbox = sinon.createSandbox();
     const listeners = new Map();
     const registrationDescriptor = Object.getOwnPropertyDescriptor(window, 'registration');
+    const skipWaitingDescriptor = Object.getOwnPropertyDescriptor(window, 'skipWaiting');
+    const skipWaiting = sandbox.stub().resolves();
     const cachedResponse = new Response(JSON.stringify({
       message: 'Se necesita conexión a internet para buscar citas públicas.',
       code: 'PUBLIC_APPOINTMENT_SEARCH_REQUIRES_CONNECTION',
@@ -58,6 +60,7 @@ describe('PWA Service Worker', () => {
         configurable: true,
         value: { scope: `${window.location.origin}/` },
       });
+      Object.defineProperty(window, 'skipWaiting', { configurable: true, value: skipWaiting });
       sandbox.stub(window, 'addEventListener').callsFake((type, listener) => {
         listeners.set(type, listener);
       });
@@ -84,6 +87,7 @@ describe('PWA Service Worker', () => {
       const body = await response.json();
 
       expect(shellCache.addAll.calledOnce).to.equal(true);
+      expect(skipWaiting.calledOnce).to.equal(true);
       expect(offlineCache.put.calledOnce).to.equal(true);
       expect(offlineCache.match.calledOnce).to.equal(true);
       expect(response.status).to.equal(503);
@@ -95,6 +99,8 @@ describe('PWA Service Worker', () => {
       } else {
         delete window.registration;
       }
+      if (skipWaitingDescriptor) Object.defineProperty(window, 'skipWaiting', skipWaitingDescriptor);
+      else delete window.skipWaiting;
     }
   });
 
@@ -107,7 +113,16 @@ describe('PWA Service Worker', () => {
       matchAll: sandbox.stub().resolves([{ postMessage: sandbox.spy() }]),
     };
     const skipWaiting = sandbox.stub().resolves();
-    const cacheNames = ['galenosv-shell-v7', 'galenosv-shell-v8', 'galenosv-private-api-user'];
+    const cacheNames = [
+      'galenosv-shell-v7',
+      'galenosv-shell-v8',
+      'galenosv-shell-v9',
+      'galenosv-shell-v10',
+      'galenosv-shell-v11',
+      'galenosv-shell-v12',
+      'galenosv-shell-v13',
+      'galenosv-private-api-user',
+    ];
     const deleteCache = sandbox.stub().resolves(true);
     const keys = sandbox.stub().resolves(cacheNames);
 
@@ -122,7 +137,13 @@ describe('PWA Service Worker', () => {
       listeners.get('activate')({ waitUntil: (promise) => { activation = promise; } });
       await activation;
       expect(cachesKeys.calledOnce).to.equal(true);
-      expect(cachesDelete.calledOnceWithExactly('galenosv-shell-v7')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v7')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v8')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v9')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v10')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v11')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v12')).to.equal(true);
+      expect(cachesDelete.calledWith('galenosv-shell-v13')).to.equal(false);
       expect(clients.claim.calledOnce).to.equal(true);
 
       listeners.get('message')({ data: { type: 'SKIP_WAITING' } });
@@ -135,7 +156,7 @@ describe('PWA Service Worker', () => {
       });
       await clearPromise;
       expect(cachesDelete.calledWith('galenosv-private-api-user')).to.equal(true);
-      expect(cachesDelete.calledWith('galenosv-shell-v8')).to.equal(false);
+      expect(cachesDelete.calledWith('galenosv-shell-v13')).to.equal(false);
 
       let syncPromise;
       listeners.get('sync')({
@@ -190,7 +211,7 @@ describe('PWA Service Worker', () => {
         headers: { 'Content-Type': 'application/json' },
       }));
       const clinicRequest = new Request(
-        'http://localhost:9080/Odontologia_SV-1.0-SNAPSHOT/api/v1/clinicas/all',
+        'http://localhost:9080/Odontologia_SV-1.0-SNAPSHOT/api/v1/clinicas/activas',
       );
       let clinicPromise;
       listeners.get('fetch')({
@@ -244,7 +265,7 @@ describe('PWA Service Worker', () => {
       fetchStub.onCall(4).resolves(new Response('fresh catalog', { status: 200 }));
       let freshPromise;
       listeners.get('fetch')({
-        request: new Request(`${window.location.origin}/api/v1/clinicas/all`),
+        request: new Request(`${window.location.origin}/api/v1/clinicas/activas`),
         respondWith: (promise) => { freshPromise = promise; },
       });
       expect(await (await freshPromise).text()).to.equal('fresh catalog');

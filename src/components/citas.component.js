@@ -74,11 +74,6 @@ citasTemplate.innerHTML = `
   </div>
 `;
 
-const dateInputValue = (date) => {
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 10);
-};
-
 class GalenoCitas extends HTMLElement {
   #state = new Proxy({
     citas: [],
@@ -100,13 +95,7 @@ class GalenoCitas extends HTMLElement {
 
   connectedCallback() {
     this.shadowRoot.querySelector('#search-form').addEventListener('submit', (event) => this.#search(event));
-    const today = dateInputValue(new Date());
-    this.shadowRoot.querySelector('#date-from').min = today;
-    this.shadowRoot.querySelector('#date-to').min = today;
     this.#loadClinicas();
-    this.shadowRoot.querySelector('#date-from').addEventListener('change', ({ currentTarget }) => {
-      this.shadowRoot.querySelector('#date-to').min = currentTarget.value || today;
-    });
     this.shadowRoot.querySelector('#appointment-results').addEventListener('ticket-download', (event) => {
       this.dispatchEvent(new CustomEvent('ticket-download', {
         bubbles: true,
