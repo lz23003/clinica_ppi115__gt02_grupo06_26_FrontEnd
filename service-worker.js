@@ -8,7 +8,7 @@
  */
 
 
-const VERSION = 'clinicasv-v1.0.4';
+const VERSION = 'clinicasv-v1.0.7';
 const SHELL_CACHE = `${VERSION}-shell`;
 const API_CACHE = `${VERSION}-api`;
 const ASSET_CACHE = `${VERSION}-assets`;
@@ -27,6 +27,7 @@ const APP_SHELL = [
   './src/styles/components/ui-button.css',
   './src/styles/components/ui-input.css',
   './src/styles/components/ui-select.css',
+  './src/styles/components/ui-confirm.css',
 
   // --- Estilos de Vistas (Nuevos) ---
   './src/styles/views/view-login.css',
@@ -46,6 +47,7 @@ const APP_SHELL = [
   './src/entity/persona-rol.js',
   './src/entity/tipo-documento.js',
   './src/entity/consulta.js',
+  './src/entity/registro-paso.js',
   
   // --- Capa Control ---
   './src/control/api-client.js',
@@ -63,6 +65,7 @@ const APP_SHELL = [
   './src/boundary/components/ui-button.js',
   './src/boundary/components/ui-input.js',
   './src/boundary/components/ui-select.js',
+  './src/boundary/components/ui-confirm.js',
   
   // --- Capa Boundary (Vistas) ---
   './src/boundary/views/view-login.js',
@@ -77,7 +80,6 @@ self.addEventListener('install', (event) => {
     caches.open(SHELL_CACHE)
       .then((cache) => cache.addAll(APP_SHELL))
       .then(() => self.skipWaiting())
-      .catch((err) => console.warn('[SW] Install cache error:', err))
   );
 });
 
@@ -117,16 +119,15 @@ self.addEventListener('fetch', (event) => {
 // ---------- ESTRATEGIAS ----------
 async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
   if (cached) return cached;
   try {
     const response = await fetch(request);
-    if (response && response.status === 200) cache.put(request, response.clone());
+    if (response && response.ok) await cache.put(request, response.clone());
     return response;
   } catch (err) {
     if (request.mode === 'navigate') {
-      const shell = await caches.open(SHELL_CACHE);
-      const fallback = await shell.match('./index.html');
+      const fallback = await caches.match('./index.html');
       if (fallback) return fallback;
     }
     return new Response('Offline', { status: 503, statusText: 'Offline' });

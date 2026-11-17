@@ -1,6 +1,7 @@
 :host {
   display: block;
-  margin-bottom: var(--spacing-md, 16px);
+  width: var(--ui-select-width, 100%);
+  margin-bottom: var(--ui-select-margin-bottom, var(--spacing-md, 16px));
   font-family: var(--font-family, sans-serif);
 }
 

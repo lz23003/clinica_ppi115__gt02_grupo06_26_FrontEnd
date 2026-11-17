@@ -12,6 +12,7 @@ export class ViewLogin extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.authService = new AuthService();
+    this.tipoDocService = new TipoDocumentoService();
     
     this.shadowRoot.innerHTML = `
     
@@ -68,17 +69,26 @@ export class ViewLogin extends HTMLElement {
 
   async _cargarTiposDocumento() {
     try {
-      const service = new TipoDocumentoService();
-      const tipos = await service.listarActivos();
-      
+      await customElements.whenDefined('ui-select');
+      const tipos = await this.tipoDocService.listarActivos();
+      if (tipos.length === 0) {
+        this._errorMsg.textContent = 'No hay tipos de documento activos disponibles.';
+        this._errorMsg.style.display = 'block';
+        return;
+      }
+
       const opciones = tipos.map(t => ({
         value: t.idTipoDocumento,
         label: t.nombre
       }));
-      
-      this._selectDoc.setOptions(opciones);
+      this.shadowRoot.getElementById('tipo-doc').setOptions(opciones);
     } catch (error) {
       console.error("Error al cargar tipos:", error);
+      this._errorMsg.textContent = 'No se pudieron cargar los tipos de documento. Intenta recargar la página.';
+      this._errorMsg.style.display = 'block';
+      window.dispatchEvent(new CustomEvent('ui-toast', {
+        detail: { type: 'danger', message: 'Error al cargar tipos de documento: ' + error.message }
+      }));
     }
   }
 

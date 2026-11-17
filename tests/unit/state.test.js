@@ -1,52 +1,64 @@
-import { test, describe, beforeEach } from 'node:test';
-import assert from 'node:assert';
+import { expect } from '../js/lib/chai/index.js';
+import sinon from '../js/lib/sinon/sinon-esm.js';
 import { SessionStore } from '../../src/state/session-store.js';
 
+const { describe, it, beforeEach, afterEach } = globalThis;
+
 describe('Capa State - SessionStore', () => {
-  
-  // Mock de localStorage para Node.js
+  let storage;
+
   beforeEach(() => {
-    global.localStorage = {
+    storage = {
       _data: {},
-      getItem(key) { return this._data[key] || null; },
-      setItem(key, value) { this._data[key] = String(value); },
-      removeItem(key) { delete this._data[key]; }
+      getItem: sinon.stub().callsFake((key) => storage._data[key] ?? null),
+      setItem: sinon.stub().callsFake((key, value) => {
+        storage._data[key] = String(value);
+      }),
+      removeItem: sinon.stub().callsFake((key) => {
+        delete storage._data[key];
+      })
     };
+    globalThis.localStorage = storage;
   });
 
-  test('setSession debe guardar los datos en localStorage', () => {
+  afterEach(() => {
+    delete globalThis.localStorage;
+  });
+
+  it('setSession debe guardar los datos en localStorage', () => {
     const persona = { idPersona: '1', nombres: 'Luis' };
     const roles = [{ idRol: 'doc' }];
-    
+
     SessionStore.setSession(persona, roles);
-    
-    const stored = global.localStorage.getItem('clinicasv_session');
-    assert.ok(stored);
-    
+
+    const stored = globalThis.localStorage.getItem('clinicasv_session');
+    expect(stored).to.be.a('string');
     const parsed = JSON.parse(stored);
-    assert.strictEqual(parsed.persona.nombres, 'Luis');
-    assert.strictEqual(parsed.roles.length, 1);
+    expect(parsed.persona.nombres).to.equal('Luis');
+    expect(parsed.roles).to.have.lengthOf(1);
+    sinon.assert.calledWith(
+      storage.setItem,
+      'clinicasv_session',
+      JSON.stringify({ persona, roles })
+    );
   });
 
-  test('getSession debe retornar null si no hay sesión', () => {
+  it('getSession debe retornar null si no hay sesión', () => {
+    expect(SessionStore.getSession()).to.equal(null);
+  });
+
+  it('getSession debe retornar los datos correctos si ya existe sesión', () => {
+    SessionStore.setSession({ idPersona: '99', nombres: 'Maria' }, []);
+
     const session = SessionStore.getSession();
-    assert.strictEqual(session, null);
+    expect(session.persona.idPersona).to.equal('99');
   });
 
-  test('getSession debe retornar los datos correctos si ya existe sesión', () => {
-    const persona = { idPersona: '99', nombres: 'Maria' };
-    SessionStore.setSession(persona, []);
-    
-    const session = SessionStore.getSession();
-    assert.strictEqual(session.persona.idPersona, '99');
-  });
-
-  test('clear debe eliminar la sesión del localStorage', () => {
+  it('clear debe eliminar la sesión del localStorage', () => {
     SessionStore.setSession({ idPersona: '1' }, []);
     SessionStore.clear();
-    
-    const session = SessionStore.getSession();
-    assert.strictEqual(session, null);
-  });
 
+    expect(SessionStore.getSession()).to.equal(null);
+    sinon.assert.calledWith(storage.removeItem, 'clinicasv_session');
+  });
 });

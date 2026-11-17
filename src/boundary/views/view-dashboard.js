@@ -1,6 +1,10 @@
 import { ConsultaService } from '../../control/consulta-service.js';
 import { SessionStore } from '../../state/session-store.js';
 import { ApiClient } from '../../control/api-client.js';
+import { RegistroPaso } from '../../entity/registro-paso.js';
+
+import '../components/ui-button.js';
+import '../components/ui-select.js';
 
 export class ViewDashboard extends HTMLElement {
   constructor() {
@@ -14,91 +18,68 @@ export class ViewDashboard extends HTMLElement {
     this.rolesDisponibles = [];
 
     this.shadowRoot.innerHTML = `
-      <style>
-        :host { display:block; padding:24px; max-width:1200px; margin:0 auto; background:var(--color-bg); min-height:100vh; font-family:var(--font-family); }
-        header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
-        h1 { color:var(--color-primary); margin:0; font-size:1.5rem; }
-        .user-info { display:flex; align-items:center; gap:15px; font-size:.9rem; color:var(--color-text); }
-        .btn-logout { background:var(--color-danger); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold; }
-        .context-panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:16px; margin-bottom:24px; box-shadow:var(--shadow-sm); }
-        .context-panel h3 { margin:0 0 10px; font-size:1rem; color:var(--color-primary); border-bottom:1px solid var(--color-border); padding-bottom:8px; }
-        .ctx-row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
-        .ctx-row > div { flex:1; min-width:180px; display:flex; flex-direction:column; }
-        .ctx-row label { font-size:.8rem; font-weight:bold; margin-bottom:4px; }
-        .search-panel { background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:16px; margin-bottom:24px; display:flex; gap:16px; flex-wrap:wrap; }
-        .search-input, .search-select { flex:1; min-width:180px; padding:10px; border:1px solid var(--color-border); border-radius:6px; }
-        .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap:16px; }
-        .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; overflow:hidden; box-shadow:var(--shadow-sm); display:flex; flex-direction:column; }
-        .card-header { display:flex; gap:12px; padding:16px; border-bottom:1px solid var(--color-border); }
-        .avatar { width:50px; height:50px; border-radius:50%; background:#ddd; display:flex; align-items:center; justify-content:center; font-size:1.2rem; font-weight:bold; color:#555; flex-shrink:0; }
-        .card-info h4 { margin:0 0 4px; color:var(--color-primary); font-size:1rem; }
-        .card-info p { margin:0; font-size:.8rem; color:var(--color-text-muted); }
-        .card-body { padding:12px 16px; font-size:.85rem; flex-grow:1; }
-        .proc-title { font-weight:bold; color:var(--color-primary); margin:8px 0 4px; font-size:.9rem; }
-        .paso-row { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-left:3px solid var(--color-border); margin:4px 0; font-size:.8rem; }
-        .paso-row.done { border-left-color:var(--color-success); }
-        .paso-row.pending { border-left-color:#f6c48c; }
-        .paso-row .name { font-weight:600; }
-        .paso-row .meta { color:var(--color-text-muted); font-size:.72rem; }
-        .btn-ver { background:none; border:1px solid var(--color-border); border-radius:4px; padding:2px 8px; cursor:pointer; font-size:.72rem; }
-        .card-footer { padding:12px 16px; background:#f9f9f9; border-top:1px solid var(--color-border); }
-        .btn-atender { width:100%; padding:10px; background:var(--color-secondary); color:var(--color-primary); border:1px solid var(--color-border); border-radius:6px; cursor:pointer; font-weight:bold; }
-        .btn-atender:hover:not(:disabled) { background:var(--color-primary); color:#fff; }
-        .btn-atender:disabled { background:#ccc; color:#666; cursor:not-allowed; }
-        .empty { text-align:center; padding:30px; color:var(--color-text-muted); }
-        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
-        .modal { background:#fff; border-radius:8px; padding:20px; max-width:500px; width:90%; max-height:80vh; overflow:auto; }
-        .modal h3 { margin-top:0; color:var(--color-primary); }
-        .modal pre { white-space:pre-wrap; word-wrap:break-word; background:#f4f4f4; padding:10px; border-radius:4px; font-size:.85rem; }
-      </style>
-
       <header>
         <h1>Dashboard del Empleado</h1>
         <div class="user-info">
           <span id="nombre-usuario">Cargando...</span>
-          <button class="btn-logout" id="btn-logout">Cerrar Sesión</button>
+          <ui-button class="btn-logout" id="btn-logout">Cerrar Sesión</ui-button>
         </div>
       </header>
 
       <div class="context-panel">
         <h3>Selección de Contexto</h3>
         <div class="ctx-row">
-          <div><label>Clínica</label><select id="select-clinica" class="search-select"></select></div>
-          <div><label>Rol</label><select id="select-rol" class="search-select"></select></div>
-          <div style="flex:0 0 auto;"><button class="btn-atender" id="btn-cargar" style="padding:10px 20px;">Cargar Consultas</button></div>
+          <ui-select class="search-select" id="select-clinica" label="Clínica"></ui-select>
+          <ui-select class="search-select" id="select-rol" label="Rol"></ui-select>
+          <ui-button class="btn-cargar" id="btn-cargar">Cargar Consultas</ui-button>
         </div>
       </div>
 
       <div class="search-panel">
         <input type="text" id="filtro-texto" class="search-input" placeholder="Buscar Paciente...">
-        <select id="filtro-fecha" class="search-select">
-          <option value="hoy">Rango de Fechas: Hoy</option>
-          <option value="pasado">Rango de Fechas: Pasado</option>
-          <option value="futuro">Rango de Fechas: Futuro</option>
-          <option value="todos">Todas las fechas</option>
-        </select>
+        <ui-select class="search-select" id="filtro-fecha" label="Rango de Fechas"></ui-select>
       </div>
 
       <h2>Consultas</h2>
       <div class="grid" id="lista-consultas"><p class="empty">Cargando consultas...</p></div>
     `;
+    this.shadowRoot.getElementById('filtro-fecha').setOptions([
+      { value: 'hoy', label: 'Hoy' },
+      { value: 'pasado', label: 'Pasado' },
+      { value: 'futuro', label: 'Futuro' },
+      { value: 'todos', label: 'Todas las fechas' }
+    ], false);
+    this._cargarEstilos();
+  }
+
+  async _cargarEstilos() {
+    try {
+      const url = new URL('../../styles/views/view-dashboard.css', import.meta.url);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('No se encontró el CSS del dashboard.');
+      const style = document.createElement('style');
+      style.textContent = await response.text();
+      this.shadowRoot.appendChild(style);
+    } catch (error) {
+      console.warn('No se pudo cargar el CSS del dashboard:', error);
+    }
   }
 
   connectedCallback() {
     this._renderSessionInfo();
 
-    this.shadowRoot.getElementById('btn-logout').addEventListener('click', () => {
+    this.shadowRoot.getElementById('btn-logout').addEventListener('ui-click', () => {
       SessionStore.clear();
       window.location.hash = '#/login';
     });
     this.shadowRoot.getElementById('filtro-texto').addEventListener('input', () => this._aplicarFiltros());
-    this.shadowRoot.getElementById('filtro-fecha').addEventListener('change', () => this._aplicarFiltros());
-    this.shadowRoot.getElementById('select-rol').addEventListener('change', () => this._cargarConsultas());
-    this.shadowRoot.getElementById('select-clinica').addEventListener('change', () => {
+    this.shadowRoot.getElementById('filtro-fecha').addEventListener('ui-change', () => this._aplicarFiltros());
+    this.shadowRoot.getElementById('select-rol').addEventListener('ui-change', () => this._cargarConsultas());
+    this.shadowRoot.getElementById('select-clinica').addEventListener('ui-change', () => {
       this._filtrarRolesPorClinica();
       this._cargarConsultas();
     });
-    this.shadowRoot.getElementById('btn-cargar').addEventListener('click', () => this._cargarConsultas());
+    this.shadowRoot.getElementById('btn-cargar').addEventListener('ui-click', () => this._cargarConsultas());
   }
 
   _renderSessionInfo() {
@@ -116,13 +97,13 @@ export class ViewDashboard extends HTMLElement {
       }
     });
     const selectClinica = this.shadowRoot.getElementById('select-clinica');
-    selectClinica.innerHTML = '';
-    clinicasUnicas.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.idClinica;
-      opt.textContent = c.nombre;
-      selectClinica.appendChild(opt);
-    });
+    selectClinica.setOptions(
+      [...clinicasUnicas.values()].map(clinica => ({
+        value: clinica.idClinica,
+        label: clinica.nombre
+      })),
+      false
+    );
 
     this._filtrarRolesPorClinica();
     this._cargarConsultas();
@@ -131,20 +112,17 @@ export class ViewDashboard extends HTMLElement {
   _filtrarRolesPorClinica() {
     const idClinica = this.shadowRoot.getElementById('select-clinica').value;
     const selectRol = this.shadowRoot.getElementById('select-rol');
-    selectRol.innerHTML = '';
     
     const rolesDeClinica = this.rolesDisponibles.filter(r => 
       r.idClinica && r.idClinica.idClinica === idClinica
     );
-
-    rolesDeClinica.forEach(r => {
-      if (r.idRol) {
-        const opt = document.createElement('option');
-        opt.value = r.idRol.idRol;
-        opt.textContent = r.idRol.nombre;
-        selectRol.appendChild(opt);
-      }
-    });
+    selectRol.setOptions(
+      rolesDeClinica.filter(role => role.idRol).map(role => ({
+        value: role.idRol.idRol,
+        label: role.idRol.nombre
+      })),
+      false
+    );
   }
 
   async _cargarConsultas() {
@@ -178,7 +156,7 @@ export class ViewDashboard extends HTMLElement {
       this.consultasOriginales = consultas;
       this._aplicarFiltros();
     } catch (error) {
-      contenedor.innerHTML = `<p class="empty" style="color:var(--color-danger)">Error: ${error.message}</p>`;
+      contenedor.innerHTML = `<p class="empty error">Error: ${error.message}</p>`;
     }
   }
 
@@ -272,12 +250,12 @@ export class ViewDashboard extends HTMLElement {
                 <div class="name">${done ? '✔' : '○'} ${p.nombrePaso || 'Paso'}</div>
                 <div class="meta">${quien}${fechaPaso ? ' · ' + fechaPaso : ''}</div>
               </div>
-              ${p.valor ? `<button class="btn-ver" data-paso="${p.idConsultaProcedimientoPaso}">Ver</button>` : ''}
+              ${p.valor ? `<ui-button class="btn-ver" data-paso="${p.idConsultaProcedimientoPaso}">Ver</ui-button>` : ''}
             </div>`;
         });
       });
     } else {
-      pasosHtml = '<p class="empty" style="padding:6px 0;">Sin procedimientos registrados.</p>';
+      pasosHtml = '<p class="empty empty-compact">Sin procedimientos registrados.</p>';
     }
 
     card.innerHTML = `
@@ -291,14 +269,14 @@ export class ViewDashboard extends HTMLElement {
       </div>
       <div class="card-body">${pasosHtml}</div>
       <div class="card-footer">
-        <button class="btn-atender" data-id="${c.idConsulta}" ${yaAtendida ? 'disabled' : ''}>
+        <ui-button class="btn-atender" data-id="${c.idConsulta}" ${yaAtendida ? 'disabled' : ''}>
           ${yaAtendida ? 'Consulta Atendida' : 'Atender Consulta'}
-        </button>
+        </ui-button>
       </div>
     `;
 
     card.querySelectorAll('.btn-ver').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('ui-click', () => {
         const idPaso = btn.getAttribute('data-paso');
         let valorRaw = '';
         if (detalle) {
@@ -313,7 +291,7 @@ export class ViewDashboard extends HTMLElement {
 
     const btnAtender = card.querySelector('.btn-atender');
     if (!yaAtendida) {
-      btnAtender.addEventListener('click', () => {
+      btnAtender.addEventListener('ui-click', () => {
         localStorage.setItem('consulta_activa', c.idConsulta);
         window.location.hash = '#/consulta';
       });
@@ -326,20 +304,17 @@ export class ViewDashboard extends HTMLElement {
     let contenidoHtml = '<p>Sin notas registradas.</p>';
 
     if (valorRaw) {
-      const partes = valorRaw.split('|');
-      let notas = partes[0] ? partes[0].replace('NOTAS:', '').trim() : '';
-      let diagnostico = partes[1] ? partes[1].replace('DIAGNÓSTICO:', '').trim() : '';
-      let plan = partes[2] ? partes[2].replace('PLAN:', '').trim() : '';
+      const { notas, diagnostico, plan } = RegistroPaso.parsear(valorRaw);
 
       contenidoHtml = '';
       if (notas) {
-        contenidoHtml += `<div style="margin-bottom:10px;"><strong>📝 Notas:</strong><br>${this._escapeHtml(notas)}</div>`;
+        contenidoHtml += `<div class="registro-field"><strong>📝 Notas:</strong><br>${this._escapeHtml(notas)}</div>`;
       }
       if (diagnostico) {
-        contenidoHtml += `<div style="margin-bottom:10px;"><strong>🩺 Diagnóstico:</strong><br>${this._escapeHtml(diagnostico)}</div>`;
+        contenidoHtml += `<div class="registro-field"><strong>🩺 Diagnóstico:</strong><br>${this._escapeHtml(diagnostico)}</div>`;
       }
       if (plan) {
-        contenidoHtml += `<div><strong>💊 Plan:</strong><br>${this._escapeHtml(plan)}</div>`;
+        contenidoHtml += `<div class="registro-field"><strong>💊 Plan:</strong><br>${this._escapeHtml(plan)}</div>`;
       }
     }
 
@@ -348,13 +323,13 @@ export class ViewDashboard extends HTMLElement {
     overlay.innerHTML = `
       <div class="modal">
         <h3>Registro del Paso</h3>
-        <div style="background:#f4f4f4; padding:12px; border-radius:6px; font-size:0.9rem; line-height:1.5;">
+        <div class="registro-content">
           ${contenidoHtml}
         </div>
-        <button style="margin-top:15px; padding:8px 16px; cursor:pointer; width:100%; border:none; background:var(--color-primary); color:white; border-radius:4px;">Cerrar</button>
+        <ui-button class="modal-close">Cerrar</ui-button>
       </div>
     `;
-    overlay.querySelector('button').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('.modal-close').addEventListener('ui-click', () => overlay.remove());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     this.shadowRoot.appendChild(overlay);
   }

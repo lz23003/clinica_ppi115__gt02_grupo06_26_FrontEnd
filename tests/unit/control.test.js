@@ -1,61 +1,93 @@
-import { test, describe, beforeEach } from 'node:test';
-import assert from 'node:assert';
+import { expect } from '../js/lib/chai/index.js';
+import sinon from '../js/lib/sinon/sinon-esm.js';
 import { ApiClient } from '../../src/control/api-client.js';
 import { AuthService } from '../../src/control/auth-service.js';
 
-describe('Capa Control - Pruebas de Servicios', () => {
+const { describe, it, beforeEach, afterEach } = globalThis;
 
+function jsonResponse(data, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: () => 'application/json' },
+    text: async () => JSON.stringify(data)
+  };
+}
+
+describe('Capa Control - Pruebas de Servicios', () => {
   beforeEach(() => {
-    // Mock de fetch global
-    global.fetch = async (url, options) => {
+    globalThis.window = {
+      CLINICASV_API_URL: 'http://test.com',
+      location: { protocol: 'http:', hostname: 'localhost' }
+    };
+
+    sinon.stub(globalThis, 'fetch').callsFake(async (url) => {
       if (url.includes('/personas/buscar')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: async () => ({ idPersona: '1', nombres: 'Test', apellidos: 'User' }),
-          text: async () => 'ok'
-        };
+        return jsonResponse({
+          idPersona: '1',
+          nombres: 'Test',
+          apellidos: 'User'
+        });
       }
       if (url.includes('/personas-roles/persona/1')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: async () => ([{ idRol: { nombre: 'Doctor' } }]),
-          text: async () => 'ok'
-        };
+        return jsonResponse([{ idRol: { nombre: 'Doctor' } }]);
       }
-      // Para cualquier otra ruta
-      return { ok: false, status: 404, text: async () => 'Error 404' };
-    };
+      return {
+        ok: false,
+        status: 404,
+        text: async () => 'Error 404'
+      };
+    });
   });
 
-  test('ApiClient.get debe retornar JSON si el fetch es exitoso', async () => {
+  afterEach(() => {
+    sinon.restore();
+    delete globalThis.window;
+  });
+
+  it('ApiClient.get debe retornar JSON si el fetch es exitoso', async () => {
     const api = new ApiClient('http://test.com');
     const data = await api.get('/personas/buscar');
-    
-    assert.strictEqual(data.nombres, 'Test');
-    assert.strictEqual(data.idPersona, '1');
+
+    expect(data.nombres).to.equal('Test');
+    expect(data.idPersona).to.equal('1');
   });
 
-  test('ApiClient.request debe lanzar un error si el status no es ok', async () => {
+  it('ApiClient.get debe permitir solicitar respuestas binarias', async () => {
+    globalThis.fetch.resetBehavior();
+    globalThis.fetch.callsFake(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/octet-stream' },
+      blob: async () => new Blob(['ticket'], { type: 'application/octet-stream' })
+    }));
     const api = new ApiClient('http://test.com');
-    
-    await assert.rejects(
-      async () => { await api.get('/ruta-inexistente'); },
-      /Error 404/
-    );
+
+    const pdf = await api.get('/consultas/1/ticket', {
+      headers: { Accept: '*/*' },
+      responseType: 'blob'
+    });
+
+    expect(pdf).to.be.instanceOf(Blob);
+    expect(globalThis.fetch.firstCall.args[1].headers.Accept).to.equal('*/*');
+    expect(globalThis.fetch.firstCall.args[1]).not.to.have.property('responseType');
   });
 
-  test('AuthService.login debe validar que el usuario tenga roles de empleado', async () => {
+  it('ApiClient.request debe lanzar un error si el status no es ok', async () => {
+    const api = new ApiClient('http://test.com');
+    const error = await api.get('/ruta-inexistente')
+      .then(() => null, (reason) => reason);
+
+    expect(error).to.be.instanceOf(Error);
+    expect(error.message).to.match(/Error 404/);
+  });
+
+  it('AuthService.login debe validar que el usuario tenga roles de empleado', async () => {
     const authService = new AuthService();
     const res = await authService.login('uuid-tipo-doc', '12345678-9');
-    
-    assert.ok(res.persona);
-    assert.strictEqual(res.persona.nombres, 'Test');
-    assert.strictEqual(res.roles.length, 1);
-    assert.strictEqual(res.roles[0].idRol.nombre, 'Doctor');
-  });
 
+    expect(res.persona.nombres).to.equal('Test');
+    expect(res.roles).to.have.lengthOf(1);
+    expect(res.roles[0].idRol.nombre).to.equal('Doctor');
+  });
 });

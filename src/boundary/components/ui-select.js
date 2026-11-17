@@ -38,8 +38,10 @@ export class UiSelect extends HTMLElement {
     if (name === 'label') this._label.textContent = newVal;
   }
 
-  setOptions(options) {
-    this._select.innerHTML = '<option value="">-- Seleccione --</option>';
+  setOptions(options, includePlaceholder = true) {
+    this._select.innerHTML = includePlaceholder
+      ? '<option value="">-- Seleccione --</option>'
+      : '';
     options.forEach(opt => {
       const el = document.createElement('option');
       el.value = opt.value;
@@ -49,5 +51,6 @@ export class UiSelect extends HTMLElement {
   }
 
   get value() { return this._select.value; }
+  set value(value) { this._select.value = value; }
 }
 customElements.define('ui-select', UiSelect);

@@ -11,6 +11,24 @@
 .header { text-align: center; margin-bottom: var(--spacing-lg); }
 h1 { color: var(--color-primary); margin-bottom: var(--spacing-sm); }
 .card { background: var(--color-surface); padding: var(--spacing-lg); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
+.form-title { margin-top: 0; color: var(--color-primary); }
+
+.date-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.date-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.date-hint { font-size: 0.7rem; color: var(--color-text-muted); }
+.message-error { color: var(--color-danger); }
 
 /* Estilos del Asistente de Búsqueda */
 .form-grid { 
@@ -34,6 +52,12 @@ h1 { color: var(--color-primary); margin-bottom: var(--spacing-sm); }
   display: flex; 
   justify-content: center; 
   margin-top: var(--spacing-md);
+}
+
+ui-button.button-search { --ui-button-width: 200px; --ui-button-margin-top: 0; }
+ui-button.button-login { --ui-button-width: 150px; --ui-button-margin-top: 0; margin-left: 10px; }
+ui-button.button-login::part(button) {
+  background: var(--color-text-muted);
 }
 
 ui-select, ui-input { margin-bottom: 0 !important; }

@@ -1,115 +1,117 @@
-import { test, describe, beforeEach } from 'node:test';
-import assert from 'node:assert';
-
-// Importamos las capas que vamos a integrar
+import { expect } from '../js/lib/chai/index.js';
+import sinon from '../js/lib/sinon/sinon-esm.js';
 import { AuthService } from '../../src/control/auth-service.js';
 import { SessionStore } from '../../src/state/session-store.js';
 
+const { describe, it, beforeEach, afterEach } = globalThis;
+
+function jsonResponse(data, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: () => 'application/json' },
+    text: async () => JSON.stringify(data)
+  };
+}
+
 describe('Integración: Flujo de Autenticación Empleado (HU2)', () => {
+  let storage;
 
-  // 1. Configuramos los mocks antes de cada prueba
   beforeEach(() => {
-    // Mock de localStorage
-    global.localStorage = {
+    storage = {
       _data: {},
-      getItem(key) { return this._data[key] || null; },
-      setItem(key, value) { this._data[key] = String(value); },
-      removeItem(key) { delete this._data[key]; }
+      getItem: sinon.stub().callsFake((key) => storage._data[key] ?? null),
+      setItem: sinon.stub().callsFake((key, value) => {
+        storage._data[key] = String(value);
+      }),
+      removeItem: sinon.stub().callsFake((key) => {
+        delete storage._data[key];
+      })
+    };
+    globalThis.localStorage = storage;
+    globalThis.window = {
+      CLINICASV_API_URL: 'http://test.com',
+      location: { protocol: 'http:', hostname: 'localhost' }
     };
 
-    // Mock de fetch (Simulamos las respuestas del backend Jakarta EE)
-    global.fetch = async (url, options) => {
-      // Simulamos la búsqueda por documento
+    sinon.stub(globalThis, 'fetch').callsFake(async (url) => {
       if (url.includes('/personas/buscar')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: async () => ({
-            idPersona: 'uuid-carlos-123',
-            nombres: 'Carlos',
-            apellidos: 'Gomez',
-            fechaNacimiento: '1990-01-01T00:00:00Z'
-          })
-        };
+        return jsonResponse({
+          idPersona: 'uuid-carlos-123',
+          nombres: 'Carlos',
+          apellidos: 'Gomez',
+          fechaNacimiento: '1990-01-01T00:00:00Z'
+        });
       }
-      // Simulamos la búsqueda de roles de esa persona
       if (url.includes('/personas-roles/persona/uuid-carlos-123')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: { get: () => 'application/json' },
-          json: async () => ([
-            {
-              idPersonaRol: 'pr-1',
-              idRol: { idRol: 'rol-doctor', nombre: 'Doctor' },
-              idClinica: { idClinica: 'clinica-1', nombre: 'Clinica Central' }
-            }
-          ])
-        };
+        return jsonResponse([
+          {
+            idPersonaRol: 'pr-1',
+            idRol: { idRol: 'rol-doctor', nombre: 'Doctor' },
+            idClinica: { idClinica: 'clinica-1', nombre: 'Clinica Central' }
+          }
+        ]);
       }
-      
-      // Simulamos que no se encuentra el documento (para el test de error)
-      if (url.includes('/personas/buscar')) {
-        return {
-          ok: false,
-          status: 404,
-          text: async () => "No se encontró la persona"
-        };
-      }
-
-      return { ok: false, status: 500, text: async () => 'Error interno' };
-    };
+      return {
+        ok: false,
+        status: 500,
+        text: async () => 'Error interno'
+      };
+    });
   });
 
-  // 2. Las pruebas de integración
-  test('Debe autenticar a un empleado, obtener sus roles y guardar la sesión correctamente', async () => {
-    // Paso 1: Instanciamos los servicios
-    const authService = new AuthService();
+  afterEach(() => {
+    sinon.restore();
+    delete globalThis.localStorage;
+    delete globalThis.window;
+  });
 
-    // Paso 2: Ejecutamos el login (esto internamente llama a ApiClient -> fetch)
+  it('Debe autenticar a un empleado, obtener sus roles y guardar la sesión correctamente', async () => {
+    const authService = new AuthService();
     const resultado = await authService.login('uuid-tipo-dui', '12345678-9');
 
-    // Paso 3: Validamos que el AuthService devolvió los datos correctos
-    assert.strictEqual(resultado.persona.nombres, 'Carlos');
-    assert.strictEqual(resultado.roles.length, 1);
-    assert.strictEqual(resultado.roles[0].idRol.nombre, 'Doctor');
+    expect(resultado.persona.nombres).to.equal('Carlos');
+    expect(resultado.roles).to.have.lengthOf(1);
+    expect(resultado.roles[0].idRol.nombre).to.equal('Doctor');
 
-    // Paso 4: Simulamos que el ViewLogin guarda la sesión en el SessionStore
     SessionStore.setSession(resultado.persona, resultado.roles);
 
-    // Paso 5: Validamos que el SessionStore efectivamente guardó todo en el localStorage
     const sesionGuardada = SessionStore.getSession();
-    assert.ok(sesionGuardada);
-    assert.strictEqual(sesionGuardada.persona.idPersona, 'uuid-carlos-123');
-    assert.strictEqual(sesionGuardada.roles[0].idClinica.nombre, 'Clinica Central');
-  });
-
-  test('Debe rechazar el acceso si el usuario no tiene roles asignados', async () => {
-    // Modificamos el mock para que devuelva una lista de roles vacía
-    global.fetch = async (url) => {
-      if (url.includes('/personas/buscar')) {
-        return {
-          ok: true, status: 200, headers: { get: () => 'application/json' },
-          json: async () => ({ idPersona: 'uuid-paciente-sin-rol', nombres: 'Pedro', apellidos: 'SinRol' })
-        };
-      }
-      if (url.includes('/personas-roles/persona/uuid-paciente-sin-rol')) {
-        return {
-          ok: true, status: 200, headers: { get: () => 'application/json' },
-          json: async () => ([]) // Lista vacía
-        };
-      }
-      return { ok: false, status: 404, text: async () => 'Error' };
-    };
-
-    const authService = new AuthService();
-    
-    // Validamos que el servicio lance el error esperado
-    await assert.rejects(
-      async () => { await authService.login('uuid-tipo-dui', '00000000-0'); },
-      /El usuario no tiene roles asignados/
+    expect(sesionGuardada).not.to.equal(null);
+    expect(sesionGuardada.persona.idPersona).to.equal('uuid-carlos-123');
+    expect(sesionGuardada.roles[0].idClinica.nombre).to.equal('Clinica Central');
+    sinon.assert.calledWith(
+      storage.setItem,
+      'clinicasv_session',
+      sinon.match.string
     );
   });
 
+  it('Debe rechazar el acceso si el usuario no tiene roles asignados', async () => {
+    globalThis.fetch.resetBehavior();
+    globalThis.fetch.callsFake(async (url) => {
+      if (url.includes('/personas/buscar')) {
+        return jsonResponse({
+          idPersona: 'uuid-paciente-sin-rol',
+          nombres: 'Pedro',
+          apellidos: 'SinRol'
+        });
+      }
+      if (url.includes('/personas-roles/persona/uuid-paciente-sin-rol')) {
+        return jsonResponse([]);
+      }
+      return {
+        ok: false,
+        status: 404,
+        text: async () => 'Error'
+      };
+    });
+
+    const error = await new AuthService()
+      .login('uuid-tipo-dui', '00000000-0')
+      .then(() => null, (reason) => reason);
+
+    expect(error).to.be.instanceOf(Error);
+    expect(error.message).to.include('El usuario no tiene roles asignados');
+  });
 });

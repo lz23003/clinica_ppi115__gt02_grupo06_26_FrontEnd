@@ -1,6 +1,9 @@
 import { ExamenService } from '../../control/examen-service.js';
 import { PasoService } from '../../control/paso-service.js';
 import { ApiClient } from '../../control/api-client.js';
+import { RegistroPaso } from '../../entity/registro-paso.js';
+
+import '../components/ui-confirm.js';
 
 export class ViewConsulta extends HTMLElement {
   constructor() {
@@ -97,7 +100,7 @@ export class ViewConsulta extends HTMLElement {
           );
         }
         if (detalle.fechaFin && todosLosPasosFinalizados) {
-          alert("⚠️ Esta consulta ya fue atendida y finalizada. No se puede modificar.");
+          this._toast('warning', 'Esta consulta ya fue atendida y finalizada. No se puede modificar.');
           window.location.hash = '#/dashboard';
           return;
         }
@@ -125,17 +128,27 @@ export class ViewConsulta extends HTMLElement {
     });
 
     this.shadowRoot.getElementById('btn-guardar-notas').addEventListener('click', async () => {
-      await this._guardarNotasActual();
-      window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type: 'success', message: 'Notas guardadas correctamente.' } }));
+      try {
+        await this._guardarNotasActual();
+        this._toast('success', 'Notas guardadas correctamente.');
+      } catch (error) {
+        this._toast('danger', 'Error al guardar las notas: ' + error.message);
+      }
     });
 
     this.shadowRoot.getElementById('btn-finalizar').addEventListener('click', async () => {
-      if (confirm('¿Finalizar la consulta?')) {
-        try {
-          await this.api.put(`/consultas/${this.idConsulta}/finalizar`, {});
-          alert("Consulta finalizada.");
-          window.location.hash = '#/dashboard';
-        } catch (error) { alert("Error: " + error.message); }
+      const confirmation = document.createElement('ui-confirm');
+      this.shadowRoot.appendChild(confirmation);
+      const confirmed = await confirmation.show('¿Finalizar la consulta?', 'Finalizar consulta');
+      confirmation.remove();
+      if (!confirmed) return;
+
+      try {
+        await this.api.put(`/consultas/${this.idConsulta}/finalizar`, {});
+        this._toast('success', 'Consulta finalizada.');
+        window.location.hash = '#/dashboard';
+      } catch (error) {
+        this._toast('danger', 'Error: ' + error.message);
       }
     });
   }
@@ -175,10 +188,10 @@ export class ViewConsulta extends HTMLElement {
       this.idPasoActualDB = pasoEjecutado.idConsultaProcedimientoPaso;
       
       if (pasoEjecutado.valor) {
-        const partes = pasoEjecutado.valor.split('|');
-        this.shadowRoot.getElementById('notas').value = partes[0] ? partes[0].replace('NOTAS:', '').trim() : '';
-        this.shadowRoot.getElementById('diagnostico').value = partes[1] ? partes[1].replace('DIAGNÓSTICO:', '').trim() : '';
-        this.shadowRoot.getElementById('plan').value = partes[2] ? partes[2].replace('PLAN:', '').trim() : '';
+        const registro = RegistroPaso.parsear(pasoEjecutado.valor);
+        this.shadowRoot.getElementById('notas').value = registro.notas;
+        this.shadowRoot.getElementById('diagnostico').value = registro.diagnostico;
+        this.shadowRoot.getElementById('plan').value = registro.plan;
       } else {
         this.shadowRoot.getElementById('notas').value = '';
         this.shadowRoot.getElementById('diagnostico').value = '';
@@ -224,19 +237,23 @@ export class ViewConsulta extends HTMLElement {
     const notas = this.shadowRoot.getElementById('notas').value;
     const diagnostico = this.shadowRoot.getElementById('diagnostico').value;
     const plan = this.shadowRoot.getElementById('plan').value;
-    const textoCompleto = `NOTAS: ${notas} | DIAGNÓSTICO: ${diagnostico} | PLAN: ${plan}`;
+    const textoCompleto = new RegistroPaso({ notas, diagnostico, plan }).serializar();
 
-    try {
-      await this.api.put(`/consultas-procedimientos-pasos/${this.idPasoActualDB}/valor?valor=${encodeURIComponent(textoCompleto)}`);
-      const paso = this.pasosEjecutados.find(p => p.idConsultaProcedimientoPaso === this.idPasoActualDB);
-      if (paso) paso.valor = textoCompleto;
-    } catch (e) { throw e; }
+    await this.api.put(`/consultas-procedimientos-pasos/${this.idPasoActualDB}/valor?valor=${encodeURIComponent(textoCompleto)}`);
+    const paso = this.pasosEjecutados.find(p => p.idConsultaProcedimientoPaso === this.idPasoActualDB);
+    if (paso) paso.valor = textoCompleto;
   }
 
   async _asignarExamenes() {
     const seleccionados = this.shadowRoot.querySelectorAll('.examen-item input:checked');
-    if (seleccionados.length === 0) { alert("Selecciona al menos un examen."); return; }
-    if (!this.idPasoActualDB) { alert("Error: el paso no está registrado."); return; }
+    if (seleccionados.length === 0) {
+      this._toast('warning', 'Selecciona al menos un examen.');
+      return;
+    }
+    if (!this.idPasoActualDB) {
+      this._toast('danger', 'Error: el paso no está registrado.');
+      return;
+    }
 
     try {
       const ordenesViejas = await this.api.get(`/ordenes-examen/por-paso/${this.idPasoActualDB}`);
@@ -257,13 +274,15 @@ export class ViewConsulta extends HTMLElement {
           indicaciones: `EXAMEN:${idExamen}|NOMBRE:${nombre}`
         });
       }
-      alert("✅ Exámenes asignados y guardados.");
-    } catch (e) { alert("Error: " + e.message); }
+      this._toast('success', 'Exámenes asignados y guardados.');
+    } catch (error) {
+      this._toast('danger', 'Error: ' + error.message);
+    }
   }
 
   async _avanzarPaso() {
     if (this.indicePasoActual >= this.pasos.length - 1) {
-      alert("¡Último paso! Usa 'Finalizar'.");
+      this._toast('warning', "¡Último paso! Usa 'Finalizar'.");
       return;
     }
 
@@ -279,8 +298,10 @@ export class ViewConsulta extends HTMLElement {
       await this._cargarDatosDelPasoActual();
       this._actualizarUI();
       
-      alert("✅ Avanzaste al siguiente paso.");
-    } catch (e) { alert("Error al avanzar: " + e.message); }
+      this._toast('success', 'Avanzaste al siguiente paso.');
+    } catch (error) {
+      this._toast('danger', 'Error al avanzar: ' + error.message);
+    }
   }
 
   async _retrocederPaso() {
@@ -305,6 +326,10 @@ export class ViewConsulta extends HTMLElement {
     } catch (e) { 
       window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type: 'danger', message: 'Error al retroceder: ' + e.message } })); 
     }
+  }
+
+  _toast(type, message) {
+    window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type, message } }));
   }
 
   _actualizarUI() {

@@ -45,7 +45,7 @@ export class AppRoot extends HTMLElement {
 
     try {
       // Importación dinámica con la extensión exacta
-      await import(`/src/boundary/views/${archivo}`);
+      await import(`../views/${archivo}`);
       this._container.innerHTML = ''; 
       const vista = document.createElement(tagName);
       this._container.appendChild(vista);

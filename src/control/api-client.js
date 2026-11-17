@@ -13,20 +13,21 @@ export class ApiClient {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const { responseType, ...requestOptions } = options;
     const headers = {
       'Accept': 'application/json',
-      ...options.headers
+      ...requestOptions.headers
     };
 
-    if (options.body && !(options.body instanceof FormData)) {
+    if (requestOptions.body && !(requestOptions.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
-      options.body = JSON.stringify(options.body);
+      requestOptions.body = JSON.stringify(requestOptions.body);
     }
 
     const config = {
-      ...options,
+      ...requestOptions,
       headers,
-      signal: options.signal || AbortSignal.timeout(10000) 
+      signal: requestOptions.signal || AbortSignal.timeout(10000)
     };
 
     try {
@@ -40,7 +41,7 @@ export class ApiClient {
       if (response.status === 204) return null;
 
       const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/pdf')) {
+      if (responseType === 'blob' || (contentType && contentType.includes('application/pdf'))) {
         return await response.blob();
       }
 
@@ -54,7 +55,9 @@ export class ApiClient {
     }
   }
 
-  get(endpoint) { return this.request(endpoint, { method: 'GET' }); }
+  get(endpoint, options = {}) {
+    return this.request(endpoint, { ...options, method: 'GET' });
+  }
   post(endpoint, body) { return this.request(endpoint, { method: 'POST', body }); }
   put(endpoint, body) { return this.request(endpoint, { method: 'PUT', body }); }
   delete(endpoint) { return this.request(endpoint, { method: 'DELETE' }); }

@@ -1,0 +1,63 @@
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 50%);
+}
+
+.overlay.open { display: flex; }
+
+.dialog {
+  width: min(100%, 420px);
+  padding: 24px;
+  border-radius: var(--radius-lg, 8px);
+  background: var(--color-surface, #fff);
+  box-shadow: var(--shadow-md, 0 4px 16px rgb(0 0 0 / 20%));
+  color: var(--color-text, #1a2433);
+  font-family: var(--font-family, sans-serif);
+}
+
+h2 {
+  margin: 0 0 12px;
+  color: var(--color-primary, #1e5fa8);
+  font-size: 1.25rem;
+}
+
+p { margin: 0 0 24px; }
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+button {
+  padding: 10px 14px;
+  border: 1px solid var(--color-border, #d6e2ef);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1a2433);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.accept {
+  border-color: var(--color-danger, #c0392b);
+  background: var(--color-danger, #c0392b);
+  color: #fff;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-primary, #1e5fa8);
+  outline-offset: 2px;
+}

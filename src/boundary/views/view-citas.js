@@ -18,7 +18,7 @@ export class ViewCitas extends HTMLElement {
       </div>
 
       <div class="card">
-        <h3 style="margin-top:0; color:var(--color-primary);">Asistente de Búsqueda de Citas</h3>
+        <h3 class="form-title">Asistente de Búsqueda de Citas</h3>
         <div class="form-grid">
           
           <ui-select id="tipo-doc" label="Tipo de Documento"></ui-select>
@@ -30,15 +30,15 @@ export class ViewCitas extends HTMLElement {
           </ui-select>
 
           <div>
-            <label style="display:block; font-size:0.8rem; font-weight:bold; margin-bottom:4px;">Rango de Fechas</label>
+            <label class="date-label">Rango de Fechas</label>
             <div class="date-range">
               <div>
-                <input type="date" id="fecha-desde" style="width:100%; padding:8px; border:1px solid var(--color-border); border-radius:6px;">
-                <span style="font-size:0.7rem; color:var(--color-text-muted);">Desde</span>
+                <input type="date" id="fecha-desde" class="date-input">
+                <span class="date-hint">Desde</span>
               </div>
               <div>
-                <input type="date" id="fecha-hasta" style="width:100%; padding:8px; border:1px solid var(--color-border); border-radius:6px;">
-                <span style="font-size:0.7rem; color:var(--color-text-muted);">Hasta</span>
+                <input type="date" id="fecha-hasta" class="date-input">
+                <span class="date-hint">Hasta</span>
               </div>
             </div>
           </div>
@@ -46,8 +46,8 @@ export class ViewCitas extends HTMLElement {
         </div>
         
         <div class="form-actions">
-          <ui-button id="btn-buscar" style="width: 200px;">BUSCAR CITAS</ui-button>
-          <ui-button id="btn-volver-login" style="width: 150px; background: var(--color-text-muted); margin-left: 10px;">Ir a Login</ui-button>
+          <ui-button id="btn-buscar" class="button-search">BUSCAR CITAS</ui-button>
+          <ui-button id="btn-volver-login" class="button-login">Ir a Login</ui-button>
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export class ViewCitas extends HTMLElement {
       const persona = Array.isArray(personas) ? personas[0] : personas;
       
       if (!persona || !persona.idPersona) {
-        contenedor.innerHTML = '<p style="color:var(--color-danger)">No se encontraron citas para ese documento.</p>';
+        contenedor.innerHTML = '<p class="message-error">No se encontraron citas para ese documento.</p>';
         return;
       }
 
@@ -189,21 +189,35 @@ export class ViewCitas extends HTMLElement {
           <button class="btn-ticket">Descargar Ticket PDF</button>
         `;
         
-        card.querySelector('.btn-ticket').addEventListener('click', async () => {
+        const button = card.querySelector('.btn-ticket');
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          button.textContent = 'Generando...';
+          let url;
+
           try {
-            const response = await fetch(`http://127.0.0.1:9080/Odontologia_SV-1.0-SNAPSHOT/api/v1/consultas/${c.idConsulta}/ticket`);
-            if (!response.ok) throw new Error("Error al generar el PDF");
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
+            const blob = await this.api.get(`/consultas/${c.idConsulta}/ticket`, {
+              headers: { Accept: '*/*' },
+              responseType: 'blob'
+            });
+            url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = `ticket_${c.idConsulta.substring(0, 8)}.pdf`;
             document.body.appendChild(a);
             a.click();
             a.remove();
-            window.URL.revokeObjectURL(url);
           } catch (error) {
-           window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type: 'danger', message: 'No se pudo descargar el ticket: ' + error.message } }));
+            window.dispatchEvent(new CustomEvent('ui-toast', {
+              detail: {
+                type: 'danger',
+                message: 'No se pudo descargar el ticket: ' + error.message
+              }
+            }));
+          } finally {
+            if (url) window.URL.revokeObjectURL(url);
+            button.disabled = false;
+            button.textContent = 'Descargar Ticket PDF';
           }
         });
 
@@ -211,7 +225,7 @@ export class ViewCitas extends HTMLElement {
       }
 
     } catch (error) {
-      contenedor.innerHTML = `<p style="color:var(--color-danger)">Error: ${error.message}</p>`;
+      contenedor.innerHTML = `<p class="message-error">Error: ${error.message}</p>`;
     }
   }
 }

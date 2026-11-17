@@ -1,7 +1,7 @@
 :host {
   display: block;
-  width: 100%;
-  margin-top: 10px;
+  width: var(--ui-button-width, 100%);
+  margin-top: var(--ui-button-margin-top, 10px);
 }
 
 button {
