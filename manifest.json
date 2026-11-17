@@ -1,0 +1,27 @@
+{
+  "name": "ClinicaSV - Sistema de Gestión Clínica",
+  "short_name": "ClinicaSV",
+  "description": "Gestión de citas, consultas y atención médica",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1e5fa8",
+  "background_color": "#f4f8fc",
+  "lang": "es-SV",
+  "dir": "ltr",
+   "icons": [
+    {
+      "src": "./src/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./src/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

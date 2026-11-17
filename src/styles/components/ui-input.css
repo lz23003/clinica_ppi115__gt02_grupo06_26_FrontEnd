@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  margin-bottom: var(--spacing-md, 16px);
+  font-family: var(--font-family, sans-serif);
+}
+
+label {
+  display: block;
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-text, #1a2433);
+}
+
+input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #d6e2ef);
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--font-size-base, 1rem);
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--color-primary, #1e5fa8);
+  box-shadow: 0 0 0 3px rgba(30, 95, 168, 0.1);
+}
