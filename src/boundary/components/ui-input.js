@@ -4,7 +4,7 @@ export class UiInput extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     
     this.shadowRoot.innerHTML = `
-      <label id="lbl"></label>
+      <label id="lbl" for="inp"></label>
       <input id="inp" type="text" />
     `;
     this._label = this.shadowRoot.getElementById('lbl');
@@ -33,15 +33,23 @@ export class UiInput extends HTMLElement {
     }
   }
 
-  static get observedAttributes() { return ['label', 'type', 'placeholder', 'value']; }
+  static get observedAttributes() { return ['label', 'type', 'placeholder', 'value', 'disabled', 'id']; }
   attributeChangedCallback(name, oldVal, newVal) {
     if (name === 'label') this._label.textContent = newVal;
     if (name === 'type') this._input.type = newVal;
     if (name === 'placeholder') this._input.placeholder = newVal;
     if (name === 'value') this._input.value = newVal;
+    if (name === 'disabled') this._input.disabled = newVal !== null;
+    if (name === 'id') {
+      this._input.id = newVal ? `${newVal}-control` : 'inp';
+      this._label.htmlFor = this._input.id;
+    }
   }
 
   get value() { return this._input.value; }
   set value(val) { this._input.value = val; }
+  get disabled() { return this._input.disabled; }
+  set disabled(value) { this._input.disabled = Boolean(value); }
+  focus() { this._input.focus(); }
 }
 customElements.define('ui-input', UiInput);

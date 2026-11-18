@@ -33,9 +33,17 @@ export class UiButton extends HTMLElement {
     }
   }
 
-  static get observedAttributes() { return ['disabled']; }
+  static get observedAttributes() { return ['disabled', 'title']; }
   attributeChangedCallback(name, oldVal, newVal) {
     if (name === 'disabled') this._btn.disabled = newVal !== null;
+    if (name === 'title') this._btn.title = newVal ?? '';
   }
+
+  get disabled() { return this._btn.disabled; }
+  set disabled(value) {
+    if (value) this.setAttribute('disabled', '');
+    else this.removeAttribute('disabled');
+  }
+  focus() { this._btn.focus(); }
 }
 customElements.define('ui-button', UiButton);

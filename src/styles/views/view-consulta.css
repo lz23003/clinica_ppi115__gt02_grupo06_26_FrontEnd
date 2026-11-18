@@ -26,31 +26,44 @@ h2 { color: var(--color-primary); margin: 0 0 15px 0; font-size: 1.2rem; border-
 .step.active { color: var(--color-primary); text-decoration: underline; }
 .step.done { color: var(--color-success); }
 
-/* Formulario */
 .form-group { margin-bottom: 16px; }
-label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; color: var(--color-text); }
-textarea, input { width: 100%; padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; box-sizing: border-box; font-family: inherit;}
-textarea:focus, input:focus { outline: none; border-color: var(--color-primary); }
-
-/* Botón Guardar Notas (Verde) */
-.btn-save-notes { background: #7cc4a4; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; transition: 0.2s;}
-.btn-save-notes:hover { background: #5fa888; }
-
-/* Panel de Exámenes */
-.filtro-select { width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; margin-bottom: 10px; }
 .examenes-list { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding-right: 5px; margin-bottom: 15px;}
 .examen-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
-.examen-item input { width: auto; }
-.btn-asignar { background: var(--color-secondary); color: var(--color-primary); border: 1px solid var(--color-border); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s;}
-.btn-asignar:hover { background: var(--color-border); }
+.footer-actions { display: flex; justify-content: space-between; gap: 16px; margin-top: 24px; }
+.footer-actions ui-button { flex: 1; }
+.finish-row { display: flex; justify-content: center; margin-top: 15px; }
+.finish-row ui-button { max-width: 360px; }
+.back-row { margin-bottom: 15px; }
+.back-row ui-button { width: auto; margin: 0; }
+.back-row ui-button::part(button) {
+  width: auto;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
+  background: transparent;
+}
+.btn-save-notes::part(button) { background: #5fa888; }
+.btn-asignar::part(button) { background: var(--color-secondary); color: var(--color-primary); }
+.btn-secondary::part(button) { background: #e0e0e0; color: #555; }
+.btn-primary::part(button) { background: #f6c48c; color: #333; }
+.btn-danger::part(button) { background: var(--color-danger); color: white; }
+.status { min-height: 1.4em; margin: 0 0 12px; color: var(--color-text-muted); }
+.flow-error, .blocking-message {
+  margin: 0 0 15px;
+  padding: 15px;
+  border: 1px solid #ffeeba;
+  border-radius: 8px;
+  color: #856404;
+  background: #fff3cd;
+  text-align: center;
+}
+.flow-error ui-button { max-width: 220px; margin: 0 auto; }
+.procedure-select { max-width: 520px; }
 
-/* Footer Actions */
-.footer-actions { display: flex; justify-content: space-between; margin-top: 24px; }
-.btn { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; }
-.btn-secondary { background: #e0e0e0; color: #555; border: 1px solid #ccc; }
-.btn-primary { background: #f6c48c; color: #333; border: 1px solid #e0a870; }
-.btn-danger { background: var(--color-danger); color: white; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+ui-button:focus-within::part(button), ui-checkbox:focus-within, ui-input:focus-within, ui-textarea:focus-within {
+  outline: 3px solid rgba(30, 95, 168, 0.3);
+  outline-offset: 2px;
+}
 
 @media (max-width: 768px) {
   .grid { grid-template-columns: 1fr; }

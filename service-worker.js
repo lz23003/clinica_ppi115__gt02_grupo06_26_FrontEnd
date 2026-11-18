@@ -8,7 +8,7 @@
  */
 
 
-const VERSION = 'clinicasv-v1.0.9';
+const VERSION = 'clinicasv-v1.1.0';
 const SHELL_CACHE = `${VERSION}-shell`;
 const API_CACHE = `${VERSION}-api`;
 const ASSET_CACHE = `${VERSION}-assets`;
@@ -29,6 +29,8 @@ const APP_SHELL = [
   './src/styles/components/ui-select.css',
   './src/styles/components/ui-confirm.css',
   './src/styles/components/ui-connection-status.css',
+  './src/styles/components/ui-checkbox.css',
+  './src/styles/components/ui-textarea.css',
 
   // --- Estilos de Vistas (Nuevos) ---
   './src/styles/views/view-login.css',
@@ -58,6 +60,11 @@ const APP_SHELL = [
   './src/control/examen-service.js',
   './src/control/paso-service.js',
   './src/control/offline-error.js',
+  './src/control/permisos-consulta.js',
+  './src/control/flujo-pasos.js',
+  './src/control/escape-html.js',
+  './src/control/filtros-examen.js',
+  './src/control/cie10-catalogo.js',
   
   // --- Capa State ---
   './src/state/session-store.js',
@@ -70,6 +77,8 @@ const APP_SHELL = [
   './src/boundary/components/ui-select.js',
   './src/boundary/components/ui-confirm.js',
   './src/boundary/components/ui-connection-status.js',
+  './src/boundary/components/ui-checkbox.js',
+  './src/boundary/components/ui-textarea.js',
   
   // --- Capa Boundary (Vistas) ---
   './src/boundary/views/view-login.js',

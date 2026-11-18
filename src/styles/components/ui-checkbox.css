@@ -1,0 +1,23 @@
+:host {
+  display: inline-block;
+  font: inherit;
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary, #1e5fa8);
+}
+
+input:focus-visible {
+  outline: 3px solid rgba(30, 95, 168, 0.3);
+  outline-offset: 2px;
+}

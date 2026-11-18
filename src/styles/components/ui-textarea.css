@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  margin-bottom: var(--spacing-md, 16px);
+  font-family: var(--font-family, sans-serif);
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-text, #1a2433);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: 600;
+}
+
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #d6e2ef);
+  border-radius: var(--radius-md, 6px);
+  font: inherit;
+  resize: vertical;
+}
+
+textarea:focus-visible {
+  outline: 3px solid rgba(30, 95, 168, 0.3);
+  outline-offset: 1px;
+}

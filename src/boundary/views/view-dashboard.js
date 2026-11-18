@@ -1,9 +1,10 @@
 import { ConsultaService } from '../../control/consulta-service.js';
 import { SessionStore } from '../../state/session-store.js';
-import { ApiClient } from '../../control/api-client.js';
 import { RegistroPaso } from '../../entity/registro-paso.js';
 import { OfflineError } from '../../control/offline-error.js';
 import { connectivity } from '../../state/connectivity.js';
+import { consultaYaAtendida } from '../../control/flujo-pasos.js';
+import { escapeHtml } from '../../control/escape-html.js';
 
 import '../components/ui-button.js';
 import '../components/ui-select.js';
@@ -13,7 +14,6 @@ export class ViewDashboard extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.consultaService = new ConsultaService();
-    this.api = new ApiClient();
 
     this.consultasOriginales = [];
     this.detalles = new Map();
@@ -76,9 +76,13 @@ export class ViewDashboard extends HTMLElement {
     });
     this.shadowRoot.getElementById('filtro-texto').addEventListener('input', () => this._aplicarFiltros());
     this.shadowRoot.getElementById('filtro-fecha').addEventListener('ui-change', () => this._aplicarFiltros());
-    this.shadowRoot.getElementById('select-rol').addEventListener('ui-change', () => this._cargarConsultas());
+    this.shadowRoot.getElementById('select-rol').addEventListener('ui-change', () => {
+      this._guardarContexto();
+      this._cargarConsultas();
+    });
     this.shadowRoot.getElementById('select-clinica').addEventListener('ui-change', () => {
       this._filtrarRolesPorClinica();
+      this._guardarContexto();
       this._cargarConsultas();
     });
     this.shadowRoot.getElementById('btn-cargar').addEventListener('ui-click', () => this._cargarConsultas());
@@ -106,8 +110,16 @@ export class ViewDashboard extends HTMLElement {
       })),
       false
     );
+    const contexto = SessionStore.getContext();
+    if (contexto?.idClinica && clinicasUnicas.has(contexto.idClinica)) {
+      selectClinica.value = contexto.idClinica;
+    }
 
     this._filtrarRolesPorClinica();
+    if (contexto?.idRol) {
+      this.shadowRoot.getElementById('select-rol').value = contexto.idRol;
+    }
+    this._guardarContexto();
     this._cargarConsultas();
   }
 
@@ -125,6 +137,22 @@ export class ViewDashboard extends HTMLElement {
       })),
       false
     );
+    const contexto = SessionStore.getContext();
+    if (contexto?.idClinica === idClinica
+      && rolesDeClinica.some((role) => role.idRol?.idRol === contexto.idRol)) {
+      selectRol.value = contexto.idRol;
+    }
+  }
+
+  _guardarContexto() {
+    const idClinica = this.shadowRoot.getElementById('select-clinica').value;
+    const idRol = this.shadowRoot.getElementById('select-rol').value;
+    const rol = this.rolesDisponibles.find((item) =>
+      item.idClinica?.idClinica === idClinica && item.idRol?.idRol === idRol
+    );
+    if (idClinica && rol) {
+      SessionStore.setContext({ idClinica, idRol, nombreRol: rol.idRol.nombre });
+    }
   }
 
   async _cargarConsultas() {
@@ -132,6 +160,7 @@ export class ViewDashboard extends HTMLElement {
     const idClinica = this.shadowRoot.getElementById('select-clinica').value;
     const idRol = this.shadowRoot.getElementById('select-rol').value;
     if (!idClinica) return;
+    this._guardarContexto();
 
     const session = SessionStore.getSession();
     const idPersona = session?.persona?.idPersona;
@@ -150,7 +179,7 @@ export class ViewDashboard extends HTMLElement {
       this.detalles.clear();
       await Promise.all(consultas.map(async c => {
         try {
-          const d = await this.api.get(`/consultas/${c.idConsulta}/detalle-completo`);
+          const d = await this.consultaService.obtenerDetalle(c.idConsulta);
           this.detalles.set(c.idConsulta, d);
         } catch (error) {
           console.warn('Detalle falló para', c.idConsulta, error);
@@ -180,7 +209,7 @@ export class ViewDashboard extends HTMLElement {
           }
         }));
       }
-      contenedor.innerHTML = `<p class="empty error">Error: ${error.message}</p>`;
+      contenedor.innerHTML = `<p class="empty error">Error: ${escapeHtml(error.message)}</p>`;
     }
   }
 
@@ -233,22 +262,7 @@ export class ViewDashboard extends HTMLElement {
     const fecha = fechaObj ? fechaObj.toLocaleDateString('es-SV', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
     const hora = fechaObj ? fechaObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
 
-    const fechaFinObj = this._parseFecha(c.fechaFin);
-    let yaAtendida = false;
-
-    if (fechaFinObj !== null) {
-      if (detalle && detalle.procedimientos && detalle.procedimientos.length > 0) {
-        const ultimoProc = detalle.procedimientos[detalle.procedimientos.length - 1];
-        if (ultimoProc.pasos && ultimoProc.pasos.length > 0) {
-          const ultimoPaso = ultimoProc.pasos[ultimoProc.pasos.length - 1];
-          yaAtendida = (ultimoPaso.estado === 'FINALIZADO');
-        } else {
-          yaAtendida = true;
-        }
-      } else {
-        yaAtendida = true;
-      }
-    }
+    const yaAtendida = consultaYaAtendida(detalle);
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -257,12 +271,12 @@ export class ViewDashboard extends HTMLElement {
     let pasosHtml = '';
     if (detalle?.procedimientos?.length) {
       detalle.procedimientos.forEach(proc => {
-        pasosHtml += `<div class="proc-title">📋 ${proc.nombreProcedimiento || 'Procedimiento'}</div>`;
+        pasosHtml += `<div class="proc-title">📋 ${escapeHtml(proc.nombreProcedimiento || 'Procedimiento')}</div>`;
         (proc.pasos || []).forEach(p => {
           const done = p.estado === 'FINALIZADO';
           const cls = done ? 'done' : (p.estado === 'PENDIENTE' || p.estado === 'CREADO' ? 'pending' : '');
           const quien = p.realizadoPor
-            ? `${p.realizadoPor.nombres} ${p.realizadoPor.apellidos}`.trim()
+            ? escapeHtml(`${p.realizadoPor.nombres} ${p.realizadoPor.apellidos}`.trim())
             : 'Sin asignar';
           const fechaPasoObj = this._parseFecha(p.fechaInicio);
           const fechaPaso = fechaPasoObj
@@ -271,10 +285,10 @@ export class ViewDashboard extends HTMLElement {
           pasosHtml += `
             <div class="paso-row ${cls}">
               <div>
-                <div class="name">${done ? '✔' : '○'} ${p.nombrePaso || 'Paso'}</div>
-                <div class="meta">${quien}${fechaPaso ? ' · ' + fechaPaso : ''}</div>
+                <div class="name">${done ? '✔' : '○'} ${escapeHtml(p.nombrePaso || 'Paso')}</div>
+                <div class="meta">${quien}${fechaPaso ? ` · ${escapeHtml(fechaPaso)}` : ''}</div>
               </div>
-              ${p.valor ? `<ui-button class="btn-ver" data-paso="${p.idConsultaProcedimientoPaso}">Ver</ui-button>` : ''}
+              ${p.valor ? `<ui-button class="btn-ver" data-paso="${escapeHtml(p.idConsultaProcedimientoPaso)}">Ver</ui-button>` : ''}
             </div>`;
         });
       });
@@ -284,16 +298,16 @@ export class ViewDashboard extends HTMLElement {
 
     card.innerHTML = `
       <div class="card-header">
-        <div class="avatar">${iniciales}</div>
+        <div class="avatar">${escapeHtml(iniciales)}</div>
         <div class="card-info">
-          <h4>${paciente} ${yaAtendida ? '✅' : ''}</h4>
-          <p>${fecha} ${hora}</p>
-          <p>${detalle?.clinica?.nombre ?? c.idPersonaRol?.idClinica?.nombre ?? ''}</p>
+          <h4>${escapeHtml(paciente)} ${yaAtendida ? '✅' : ''}</h4>
+          <p>${escapeHtml(fecha)} ${escapeHtml(hora)}</p>
+          <p>${escapeHtml(detalle?.clinica?.nombre ?? c.idPersonaRol?.idClinica?.nombre ?? '')}</p>
         </div>
       </div>
       <div class="card-body">${pasosHtml}</div>
       <div class="card-footer">
-        <ui-button class="btn-atender" data-id="${c.idConsulta}" ${yaAtendida ? 'disabled' : ''}>
+        <ui-button class="btn-atender" data-id="${escapeHtml(c.idConsulta)}" ${yaAtendida ? 'disabled' : ''}>
           ${yaAtendida ? 'Consulta Atendida' : 'Atender Consulta'}
         </ui-button>
       </div>
@@ -316,7 +330,8 @@ export class ViewDashboard extends HTMLElement {
     const btnAtender = card.querySelector('.btn-atender');
     if (!yaAtendida) {
       btnAtender.addEventListener('ui-click', () => {
-        localStorage.setItem('consulta_activa', c.idConsulta);
+        this._guardarContexto();
+        SessionStore.setConsultaActiva(c.idConsulta);
         window.location.hash = '#/consulta';
       });
     }
@@ -332,13 +347,13 @@ export class ViewDashboard extends HTMLElement {
 
       contenidoHtml = '';
       if (notas) {
-        contenidoHtml += `<div class="registro-field"><strong>📝 Notas:</strong><br>${this._escapeHtml(notas)}</div>`;
+        contenidoHtml += `<div class="registro-field"><strong>📝 Notas:</strong><br>${escapeHtml(notas)}</div>`;
       }
       if (diagnostico) {
-        contenidoHtml += `<div class="registro-field"><strong>🩺 Diagnóstico:</strong><br>${this._escapeHtml(diagnostico)}</div>`;
+        contenidoHtml += `<div class="registro-field"><strong>🩺 Diagnóstico:</strong><br>${escapeHtml(diagnostico)}</div>`;
       }
       if (plan) {
-        contenidoHtml += `<div class="registro-field"><strong>💊 Plan:</strong><br>${this._escapeHtml(plan)}</div>`;
+        contenidoHtml += `<div class="registro-field"><strong>💊 Plan:</strong><br>${escapeHtml(plan)}</div>`;
       }
     }
 
@@ -367,10 +382,5 @@ export class ViewDashboard extends HTMLElement {
     return isNaN(d.getTime()) ? null : d;
   }
 
-  _escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, c => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[c]));
-  }
 }
 customElements.define('view-dashboard', ViewDashboard);

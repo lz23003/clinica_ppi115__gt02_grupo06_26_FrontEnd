@@ -4,7 +4,7 @@ export class UiSelect extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     
     this.shadowRoot.innerHTML = `
-      <label id="lbl"></label>
+      <label id="lbl" for="sel"></label>
       <select id="sel"></select>
     `;
     this._label = this.shadowRoot.getElementById('lbl');
@@ -33,9 +33,14 @@ export class UiSelect extends HTMLElement {
     }
   }
 
-  static get observedAttributes() { return ['label']; }
+  static get observedAttributes() { return ['label', 'id', 'disabled']; }
   attributeChangedCallback(name, oldVal, newVal) {
     if (name === 'label') this._label.textContent = newVal;
+    if (name === 'id') {
+      this._select.id = newVal ? `${newVal}-control` : 'sel';
+      this._label.htmlFor = this._select.id;
+    }
+    if (name === 'disabled') this._select.disabled = newVal !== null;
   }
 
   setOptions(options, includePlaceholder = true) {
@@ -52,5 +57,10 @@ export class UiSelect extends HTMLElement {
 
   get value() { return this._select.value; }
   set value(value) { this._select.value = value; }
+  get disabled() { return this._select.disabled; }
+  set disabled(value) {
+    if (value) this.setAttribute('disabled', '');
+    else this.removeAttribute('disabled');
+  }
 }
 customElements.define('ui-select', UiSelect);

@@ -10,7 +10,15 @@ const suites = {
     './unit/registro-paso.test.js',
     './unit/connectivity.test.js',
     './unit/offline-error.test.js',
-    './unit/api-client.test.js'
+    './unit/api-client.test.js',
+    './unit/session-store.test.js',
+    './unit/permisos-consulta.test.js',
+    './unit/filtros-examen.test.js',
+    './unit/cie10-catalogo.test.js',
+    './unit/flujo-pasos.test.js',
+    './unit/consulta-service.test.js',
+    './unit/paso-service.test.js',
+    './unit/examen-service.test.js'
   ],
   integration: ['./integration/flujo-auth.test.js']
 };
