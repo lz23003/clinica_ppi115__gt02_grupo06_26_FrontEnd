@@ -1,5 +1,7 @@
 import { ApiClient } from '../../control/api-client.js';
 import { TipoDocumentoService } from '../../control/tipo-documento-service.js';
+import { OfflineError } from '../../control/offline-error.js';
+import { connectivity } from '../../state/connectivity.js';
 
 import '../components/ui-button.js';
 import '../components/ui-input.js';
@@ -41,6 +43,7 @@ export class ViewCitas extends HTMLElement {
                 <span class="date-hint">Hasta</span>
               </div>
             </div>
+            <p id="error-rango-fechas" class="date-error" role="alert" hidden></p>
           </div>
 
         </div>
@@ -78,6 +81,12 @@ export class ViewCitas extends HTMLElement {
     this.shadowRoot.getElementById('btn-buscar').addEventListener('ui-click', () => {
       this._buscarCitas();
     });
+
+    ['fecha-desde', 'fecha-hasta'].forEach(id => {
+      this.shadowRoot.getElementById(id).addEventListener('input', () => {
+        this._limpiarErrorRangoFechas();
+      });
+    });
   }
 
   async _cargarTiposDocumento() {
@@ -88,6 +97,9 @@ export class ViewCitas extends HTMLElement {
       select.setOptions(opciones);
     } catch (error) {
       console.error("Error al cargar tipos:", error);
+      if (error instanceof OfflineError || !connectivity.isOnline()) {
+        this._toast('warning', error.message);
+      }
     }
   }
 
@@ -100,6 +112,9 @@ export class ViewCitas extends HTMLElement {
       select.setOptions(opciones);
     } catch (error) {
       console.error("Error al cargar clínicas:", error);
+      if (error instanceof OfflineError || !connectivity.isOnline()) {
+        this._toast('warning', error.message);
+      }
     }
   }
 
@@ -111,13 +126,20 @@ export class ViewCitas extends HTMLElement {
     const fechaHasta = this.shadowRoot.getElementById('fecha-hasta').value;
     
     const contenedor = this.shadowRoot.getElementById('resultados');
+
+    if (!this._validarRangoFechas(fechaDesde, fechaHasta)) return;
     
     if (!tipoDoc || !numDoc) {
-     window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type: 'warning', message: 'Por favor selecciona el tipo de documento y escribe el número.' } }));
+      window.dispatchEvent(new CustomEvent('ui-toast', {
+        detail: {
+          type: 'warning',
+          message: 'Selecciona el tipo de documento e ingresa el número para buscar tus citas.'
+        }
+      }));
       return;
     }
 
-    contenedor.innerHTML = '<p>Buscando...</p>';
+    this._mostrarEstado('Buscando tus citas', 'Estamos consultando la información. Un momento, por favor.', 'loading');
 
     try {
       // 1. Buscamos a la persona por documento
@@ -125,7 +147,11 @@ export class ViewCitas extends HTMLElement {
       const persona = Array.isArray(personas) ? personas[0] : personas;
       
       if (!persona || !persona.idPersona) {
-        contenedor.innerHTML = '<p class="message-error">No se encontraron citas para ese documento.</p>';
+        this._mostrarEstado(
+          'No encontramos ese documento',
+          'Verifica el tipo y número de documento e inténtalo nuevamente.',
+          'empty'
+        );
         return;
       }
 
@@ -152,7 +178,11 @@ export class ViewCitas extends HTMLElement {
       }
 
       if (citasPaciente.length === 0) {
-        contenedor.innerHTML = '<p>No se encontraron citas con esos filtros.</p>';
+        this._mostrarEstado(
+          'No hay citas para mostrar',
+          'No encontramos citas que coincidan con el documento, la clínica y el rango de fechas seleccionados.',
+          'empty'
+        );
         return;
       }
 
@@ -167,7 +197,7 @@ export class ViewCitas extends HTMLElement {
                 const clinica = c.idPersonaRol?.idClinica ? c.idPersonaRol.idClinica.nombre : 'Clínica Desconocida';
 
         //  HU1: Obtener procedimientos reales del backend
-        let procedimientosTexto = 'Sin procedimientos';
+        let procedimientosTexto = 'No hay procedimientos registrados.';
         try {
           const detalle = await this.api.get(`/consultas/${c.idConsulta}/detalle-completo`);
           if (detalle && detalle.procedimientos && detalle.procedimientos.length > 0) {
@@ -175,6 +205,10 @@ export class ViewCitas extends HTMLElement {
           }
         } catch (err) {
           console.warn('No se pudo cargar el detalle:', err);
+          if (err instanceof OfflineError || !connectivity.isOnline()) {
+            this._toast('warning', err.message);
+          }
+          procedimientosTexto = 'No se pudo cargar el detalle de los procedimientos.';
         }
 
         const card = document.createElement('div');
@@ -191,6 +225,11 @@ export class ViewCitas extends HTMLElement {
         
         const button = card.querySelector('.btn-ticket');
         button.addEventListener('click', async () => {
+          if (!connectivity.isOnline()) {
+            this._toast('warning', 'El ticket PDF se genera en el servidor y requiere conexión.');
+            return;
+          }
+
           button.disabled = true;
           button.textContent = 'Generando...';
           let url;
@@ -208,12 +247,10 @@ export class ViewCitas extends HTMLElement {
             a.click();
             a.remove();
           } catch (error) {
-            window.dispatchEvent(new CustomEvent('ui-toast', {
-              detail: {
-                type: 'danger',
-                message: 'No se pudo descargar el ticket: ' + error.message
-              }
-            }));
+            const message = error instanceof OfflineError
+              ? 'El ticket PDF se genera en el servidor y requiere conexión.'
+              : this._mensajeAmigable(error, 'ticket');
+            this._toast('danger', message);
           } finally {
             if (url) window.URL.revokeObjectURL(url);
             button.disabled = false;
@@ -225,8 +262,78 @@ export class ViewCitas extends HTMLElement {
       }
 
     } catch (error) {
-      contenedor.innerHTML = `<p class="message-error">Error: ${error.message}</p>`;
+      if (error instanceof OfflineError || !connectivity.isOnline()) {
+        this._toast('warning', error.message);
+      }
+      this._mostrarEstado(
+        'No pudimos cargar tus citas',
+        this._mensajeAmigable(error),
+        'error'
+      );
     }
+  }
+
+  _mostrarEstado(titulo, mensaje, tipo) {
+    const contenedor = this.shadowRoot.getElementById('resultados');
+    const estado = document.createElement('div');
+    estado.className = `result-message result-message--${tipo}`;
+    estado.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+
+    const encabezado = document.createElement('h3');
+    encabezado.textContent = titulo;
+    const detalle = document.createElement('p');
+    detalle.textContent = mensaje;
+    estado.append(encabezado, detalle);
+    contenedor.replaceChildren(estado);
+  }
+
+  _validarRangoFechas(fechaDesde, fechaHasta) {
+    const inputDesde = this.shadowRoot.getElementById('fecha-desde');
+    const inputHasta = this.shadowRoot.getElementById('fecha-hasta');
+    const error = this.shadowRoot.getElementById('error-rango-fechas');
+
+    if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
+      const mensaje = 'La fecha “Desde” no puede ser posterior a la fecha “Hasta”.';
+      inputDesde.setAttribute('aria-invalid', 'true');
+      inputHasta.setAttribute('aria-invalid', 'true');
+      error.textContent = mensaje;
+      error.hidden = false;
+      inputHasta.focus();
+      return false;
+    }
+
+    this._limpiarErrorRangoFechas();
+    return true;
+  }
+
+  _limpiarErrorRangoFechas() {
+    const error = this.shadowRoot.getElementById('error-rango-fechas');
+    error.hidden = true;
+    error.textContent = '';
+    this.shadowRoot.getElementById('fecha-desde').removeAttribute('aria-invalid');
+    this.shadowRoot.getElementById('fecha-hasta').removeAttribute('aria-invalid');
+  }
+
+  _mensajeAmigable(error, contexto = 'busqueda') {
+    const mensaje = String(error?.message ?? '').toLowerCase();
+    if (mensaje.includes('conexión') || mensaje.includes('conexion') || mensaje.includes('offline')) {
+      return 'No hay conexión con el servicio. Revisa tu conexión a internet e inténtalo de nuevo.';
+    }
+    if (mensaje.includes('tardó demasiado') || mensaje.includes('timeout')) {
+      return 'La solicitud está tardando más de lo esperado. Inténtalo nuevamente en unos momentos.';
+    }
+    if (mensaje.includes('406') || mensaje.includes('not acceptable') || mensaje.includes('no aceptable')) {
+      return contexto === 'ticket'
+        ? 'El servidor no pudo generar el ticket en este momento. Inténtalo nuevamente más tarde.'
+        : 'El servidor no pudo procesar la búsqueda. Inténtalo nuevamente más tarde.';
+    }
+    return contexto === 'ticket'
+      ? 'No pudimos generar el ticket. Verifica tu conexión e inténtalo de nuevo.'
+      : 'Ocurrió un problema al consultar las citas. Verifica tu conexión e inténtalo de nuevo.';
+  }
+
+  _toast(type, message) {
+    window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type, message } }));
   }
 }
 customElements.define('view-citas', ViewCitas);

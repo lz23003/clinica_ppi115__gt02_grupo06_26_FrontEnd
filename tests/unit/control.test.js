@@ -82,6 +82,22 @@ describe('Capa Control - Pruebas de Servicios', () => {
     expect(error.message).to.match(/Error 404/);
   });
 
+  it('ApiClient debe convertir el error offline JSON en un mensaje claro', async () => {
+    globalThis.fetch.resetBehavior();
+    globalThis.fetch.callsFake(async () => ({
+      ok: false,
+      status: 503,
+      text: async () => JSON.stringify({ error: 'offline', message: 'Sin conexión' })
+    }));
+    const api = new ApiClient('http://test.com');
+    const error = await api.get('/consultas/all')
+      .then(() => null, (reason) => reason);
+
+    expect(error.message).to.equal(
+      'No hay conexión con el servicio. Revisa tu conexión a internet e inténtalo de nuevo.'
+    );
+  });
+
   it('AuthService.login debe validar que el usuario tenga roles de empleado', async () => {
     const authService = new AuthService();
     const res = await authService.login('uuid-tipo-doc', '12345678-9');

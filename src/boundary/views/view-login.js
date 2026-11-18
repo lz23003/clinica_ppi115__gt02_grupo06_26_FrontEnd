@@ -1,6 +1,8 @@
 import { TipoDocumentoService } from '../../control/tipo-documento-service.js';
 import { AuthService } from '../../control/auth-service.js';
 import { SessionStore } from '../../state/session-store.js';
+import { OfflineError } from '../../control/offline-error.js';
+import { connectivity } from '../../state/connectivity.js';
 
 import '../components/ui-button.js';
 import '../components/ui-input.js';
@@ -54,6 +56,11 @@ export class ViewLogin extends HTMLElement {
   }
 
   connectedCallback() {
+    if (!connectivity.isOnline() && SessionStore.getSession()) {
+      window.location.hash = '#/dashboard';
+      return;
+    }
+
     this._btn = this.shadowRoot.getElementById('btn-login');
     this._selectDoc = this.shadowRoot.getElementById('tipo-doc');
     this._inputDoc = this.shadowRoot.getElementById('num-doc');
@@ -84,10 +91,13 @@ export class ViewLogin extends HTMLElement {
       this.shadowRoot.getElementById('tipo-doc').setOptions(opciones);
     } catch (error) {
       console.error("Error al cargar tipos:", error);
-      this._errorMsg.textContent = 'No se pudieron cargar los tipos de documento. Intenta recargar la página.';
+      const message = error instanceof OfflineError || !connectivity.isOnline()
+        ? 'Sin conexión. Los tipos de documento se cargarán cuando recuperes la red.'
+        : 'No se pudieron cargar los tipos de documento. Intenta recargar la página.';
+      this._errorMsg.textContent = message;
       this._errorMsg.style.display = 'block';
       window.dispatchEvent(new CustomEvent('ui-toast', {
-        detail: { type: 'danger', message: 'Error al cargar tipos de documento: ' + error.message }
+        detail: { type: 'danger', message }
       }));
     }
   }
@@ -96,6 +106,21 @@ export class ViewLogin extends HTMLElement {
   
     
     this._errorMsg.style.display = 'none';
+
+    if (!connectivity.isOnline()) {
+      if (SessionStore.getSession()) {
+        window.location.hash = '#/dashboard';
+        return;
+      }
+      const message = 'Necesitas conexión para iniciar sesión.';
+      this._errorMsg.textContent = message;
+      this._errorMsg.style.display = 'block';
+      window.dispatchEvent(new CustomEvent('ui-toast', {
+        detail: { type: 'warning', message }
+      }));
+      return;
+    }
+
     const tipoDoc = this._selectDoc.value;
     const numDoc = this._inputDoc.value.trim();
 
@@ -117,7 +142,19 @@ export class ViewLogin extends HTMLElement {
       
     } catch (error) {
       console.error("Error de Login:", error);
-      this._errorMsg.textContent = error.message;
+      if (error instanceof OfflineError || !connectivity.isOnline()) {
+        if (SessionStore.getSession()) {
+          window.location.hash = '#/dashboard';
+          return;
+        }
+        const message = 'Necesitas conexión para iniciar sesión.';
+        this._errorMsg.textContent = message;
+        window.dispatchEvent(new CustomEvent('ui-toast', {
+          detail: { type: 'warning', message }
+        }));
+      } else {
+        this._errorMsg.textContent = error.message;
+      }
       this._errorMsg.style.display = 'block';
     } finally {
       this._btn.removeAttribute('disabled');

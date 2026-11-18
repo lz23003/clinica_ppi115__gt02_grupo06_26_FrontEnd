@@ -2,6 +2,8 @@ import { ConsultaService } from '../../control/consulta-service.js';
 import { SessionStore } from '../../state/session-store.js';
 import { ApiClient } from '../../control/api-client.js';
 import { RegistroPaso } from '../../entity/registro-paso.js';
+import { OfflineError } from '../../control/offline-error.js';
+import { connectivity } from '../../state/connectivity.js';
 
 import '../components/ui-button.js';
 import '../components/ui-select.js';
@@ -150,12 +152,34 @@ export class ViewDashboard extends HTMLElement {
         try {
           const d = await this.api.get(`/consultas/${c.idConsulta}/detalle-completo`);
           this.detalles.set(c.idConsulta, d);
-        } catch (e) { console.warn('Detalle falló para', c.idConsulta, e); }
+        } catch (error) {
+          console.warn('Detalle falló para', c.idConsulta, error);
+          if (error instanceof OfflineError || !connectivity.isOnline()) {
+            window.dispatchEvent(new CustomEvent('ui-toast', {
+              detail: {
+                type: 'warning',
+                message: error instanceof OfflineError
+                  ? error.message
+                  : 'No hay conexión ni datos guardados para mostrar el detalle de algunas consultas.'
+              }
+            }));
+          }
+        }
       }));
 
       this.consultasOriginales = consultas;
       this._aplicarFiltros();
     } catch (error) {
+      if (error instanceof OfflineError || !connectivity.isOnline()) {
+        window.dispatchEvent(new CustomEvent('ui-toast', {
+          detail: {
+            type: 'warning',
+            message: error instanceof OfflineError
+              ? error.message
+              : 'No hay conexión ni datos guardados para mostrar las consultas.'
+          }
+        }));
+      }
       contenedor.innerHTML = `<p class="empty error">Error: ${error.message}</p>`;
     }
   }

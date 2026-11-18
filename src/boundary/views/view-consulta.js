@@ -2,6 +2,8 @@ import { ExamenService } from '../../control/examen-service.js';
 import { PasoService } from '../../control/paso-service.js';
 import { ApiClient } from '../../control/api-client.js';
 import { RegistroPaso } from '../../entity/registro-paso.js';
+import { OfflineError } from '../../control/offline-error.js';
+import { connectivity } from '../../state/connectivity.js';
 
 import '../components/ui-confirm.js';
 
@@ -19,6 +21,7 @@ export class ViewConsulta extends HTMLElement {
     this.pasosEjecutados = []; 
     this.indicePasoActual = 0;
     this.idPasoActualDB = null;
+    this._puedeAvanzar = true;
 
     this.shadowRoot.innerHTML = `
       <div style="margin-bottom: 15px;">
@@ -90,6 +93,11 @@ export class ViewConsulta extends HTMLElement {
   }
 
   async connectedCallback() {
+    this._unsubscribeConnectivity = connectivity.subscribe(() => {
+      this._actualizarControlesOffline();
+    });
+    this._actualizarControlesOffline();
+
     try {
       const detalle = await this.api.get(`/consultas/${this.idConsulta}/detalle-completo`);
       if (detalle) {
@@ -105,7 +113,10 @@ export class ViewConsulta extends HTMLElement {
           return;
         }
       }
-    } catch (e) { console.error(e); }
+    } catch (error) {
+      if (error instanceof OfflineError || !connectivity.isOnline()) this._toast('warning', error.message);
+      else console.error(error);
+    }
 
     await this._inicializarFlujoReal();
     await this._cargarExamenes();
@@ -132,7 +143,7 @@ export class ViewConsulta extends HTMLElement {
         await this._guardarNotasActual();
         this._toast('success', 'Notas guardadas correctamente.');
       } catch (error) {
-        this._toast('danger', 'Error al guardar las notas: ' + error.message);
+        this._mostrarError(error, 'No se pudieron guardar las notas');
       }
     });
 
@@ -148,7 +159,7 @@ export class ViewConsulta extends HTMLElement {
         this._toast('success', 'Consulta finalizada.');
         window.location.hash = '#/dashboard';
       } catch (error) {
-        this._toast('danger', 'Error: ' + error.message);
+        this._mostrarError(error, 'No se pudo finalizar la consulta');
       }
     });
   }
@@ -175,7 +186,10 @@ export class ViewConsulta extends HTMLElement {
 
       await this._cargarDatosDelPasoActual();
       this._actualizarUI();
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      if (error instanceof OfflineError || !connectivity.isOnline()) this._toast('warning', error.message);
+      else console.error(error);
+    }
   }
 
   async _cargarDatosDelPasoActual() {
@@ -225,7 +239,10 @@ export class ViewConsulta extends HTMLElement {
           }
         });
       }
-    } catch (e) { console.warn(e); }
+    } catch (error) {
+      if (error instanceof OfflineError || !connectivity.isOnline()) this._toast('warning', error.message);
+      else console.warn(error);
+    }
   }
 
   _limpiarExamenes() {
@@ -259,7 +276,7 @@ export class ViewConsulta extends HTMLElement {
       const ordenesViejas = await this.api.get(`/ordenes-examen/por-paso/${this.idPasoActualDB}`);
       if (ordenesViejas && ordenesViejas.length > 0) {
         for (const ord of ordenesViejas) {
-           try { await this.api.delete(`/ordenes-examen/${ord.idOrdenExamen}`); } catch (e) {}
+          await this.api.delete(`/ordenes-examen/${ord.idOrdenExamen}`);
         }
       }
 
@@ -276,7 +293,7 @@ export class ViewConsulta extends HTMLElement {
       }
       this._toast('success', 'Exámenes asignados y guardados.');
     } catch (error) {
-      this._toast('danger', 'Error: ' + error.message);
+      this._mostrarError(error, 'No se pudieron asignar los exámenes');
     }
   }
 
@@ -300,7 +317,7 @@ export class ViewConsulta extends HTMLElement {
       
       this._toast('success', 'Avanzaste al siguiente paso.');
     } catch (error) {
-      this._toast('danger', 'Error al avanzar: ' + error.message);
+      this._mostrarError(error, 'No se pudo avanzar al siguiente paso');
     }
   }
 
@@ -323,9 +340,43 @@ export class ViewConsulta extends HTMLElement {
       this._actualizarUI();
       
       window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type: 'success', message: 'Retrocediste al paso anterior.' } }));
-    } catch (e) { 
-      window.dispatchEvent(new CustomEvent('ui-toast', { detail: { type: 'danger', message: 'Error al retroceder: ' + e.message } })); 
+    } catch (error) {
+      this._mostrarError(error, 'No se pudo retroceder al paso anterior');
     }
+  }
+
+  disconnectedCallback() {
+    this._unsubscribeConnectivity?.();
+    this._unsubscribeConnectivity = null;
+  }
+
+  _actualizarControlesOffline() {
+    const offline = !connectivity.isOnline();
+    const controles = [
+      'btn-guardar-notas',
+      'btn-asignar-examenes',
+      'btn-siguiente',
+      'btn-anterior',
+      'btn-finalizar'
+    ];
+
+    controles.forEach(id => {
+      const button = this.shadowRoot.getElementById(id);
+      if (!button) return;
+      const disabledByWorkflow =
+        (id === 'btn-siguiente' && (this.indicePasoActual >= this.pasos.length - 1 || !this._puedeAvanzar)) ||
+        (id === 'btn-anterior' && this.indicePasoActual === 0);
+      button.disabled = offline || disabledByWorkflow;
+      if (offline) button.title = 'Requiere conexión';
+      else if (button.title === 'Requiere conexión') button.removeAttribute('title');
+    });
+  }
+
+  _mostrarError(error, mensaje) {
+    const texto = error instanceof OfflineError || !connectivity.isOnline()
+      ? 'Sin conexión. Necesitas conexión para guardar este cambio.'
+      : `${mensaje}: ${error.message}`;
+    this._toast('danger', texto);
   }
 
   _toast(type, message) {
@@ -386,6 +437,7 @@ export class ViewConsulta extends HTMLElement {
         }
       }
     }
+    this._puedeAvanzar = puedeAvanzar;
 
     // 🔥 ADAPTACIÓN DEL FORMULARIO SEGÚN EL ROL LOGUEADO
     const sesion = JSON.parse(localStorage.getItem('clinicasv_session'));
@@ -443,15 +495,12 @@ export class ViewConsulta extends HTMLElement {
       }
     }
 
-    btnAnterior.disabled = (this.indicePasoActual === 0);
-    
     if (esUltimoPaso) {
       btnSiguiente.textContent = "Último Paso Alcanzado";
-      btnSiguiente.disabled = true;
     } else {
       btnSiguiente.textContent = "Guardar y Avanzar al Siguiente Paso →";
-      btnSiguiente.disabled = !puedeAvanzar;
     }
+    this._actualizarControlesOffline();
   }
 
   async _cargarExamenes() {
@@ -465,7 +514,10 @@ export class ViewConsulta extends HTMLElement {
         div.innerHTML = `<input type="checkbox" id="ex-${ex.idExamen}" value="${ex.idExamen}"><label for="ex-${ex.idExamen}">${ex.nombre}</label>`;
         contenedor.appendChild(div);
       });
-    } catch (error) { contenedor.innerHTML = "Error al cargar exámenes"; }
+    } catch (error) {
+      contenedor.textContent = 'No se pudieron cargar los exámenes.';
+      if (error instanceof OfflineError || !connectivity.isOnline()) this._toast('warning', error.message);
+    }
   }
 
   async _cargarDatosPaciente() {
@@ -478,7 +530,10 @@ export class ViewConsulta extends HTMLElement {
         this.shadowRoot.getElementById('patient-id').textContent = `ID: ${p.idPersona.substring(0, 8)}...`;
         this.shadowRoot.getElementById('avatar').textContent = p.nombres.substring(0, 2).toUpperCase();
       }
-    } catch (e) { console.error(e); }
+    } catch (error) {
+      if (error instanceof OfflineError || !connectivity.isOnline()) this._toast('warning', error.message);
+      else console.error(error);
+    }
   }
 }
 customElements.define('view-consulta', ViewConsulta);

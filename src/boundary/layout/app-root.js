@@ -1,3 +1,5 @@
+import '../components/ui-connection-status.js';
+
 export class AppRoot extends HTMLElement {
   constructor() {
     super();
@@ -8,6 +10,7 @@ export class AppRoot extends HTMLElement {
         .vista-container { height: 100vh; }
         .error { color: var(--color-danger); padding: 2rem; text-align: center; font-family: sans-serif; }
       </style>
+      <ui-connection-status></ui-connection-status>
       <div id="vista" class="vista-container"></div>
     `;
     this._container = this.shadowRoot.getElementById('vista');

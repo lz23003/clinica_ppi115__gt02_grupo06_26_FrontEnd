@@ -28,7 +28,26 @@ h1 { color: var(--color-primary); margin-bottom: var(--spacing-sm); }
 }
 
 .date-hint { font-size: 0.7rem; color: var(--color-text-muted); }
+.date-input[aria-invalid="true"] { border-color: var(--color-danger); }
+.date-error { margin: 6px 0 0; color: var(--color-danger); font-size: 0.8rem; }
+.date-error[hidden] { display: none; }
 .message-error { color: var(--color-danger); }
+
+.result-message {
+  grid-column: 1 / -1;
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.result-message h3 { margin: 0 0 var(--spacing-sm); color: var(--color-text); }
+.result-message p { margin: 0; color: var(--color-text-muted); }
+.result-message--error { border-color: var(--color-danger); }
+.result-message--error h3 { color: var(--color-danger); }
+.result-message--loading { border-color: var(--color-primary); }
+.result-message--loading h3 { color: var(--color-primary); }
 
 /* Estilos del Asistente de Búsqueda */
 .form-grid { 

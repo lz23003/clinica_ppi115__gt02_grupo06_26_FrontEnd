@@ -1,3 +1,39 @@
+import { connectivity } from '../state/connectivity.js';
+import { OfflineError } from './offline-error.js';
+
+function messageFromErrorResponse(body, status) {
+  try {
+    const payload = JSON.parse(body);
+    if (payload.error === 'offline') {
+      return 'No hay conexión con el servicio. Revisa tu conexión a internet e inténtalo de nuevo.';
+    }
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message.trim();
+    }
+    if (typeof payload.error === 'string' && payload.error.trim()) {
+      return payload.error.trim();
+    }
+  } catch {
+    if (body.trim()) return body.trim();
+  }
+
+  return `No se pudo completar la solicitud (código ${status}).`;
+}
+
+function notifyCachedResponse(response) {
+  if (response.headers?.get?.('X-From-Cache') !== 'true') return;
+
+  const target = globalThis.window;
+  if (!target?.dispatchEvent) return;
+
+  const EventConstructor = globalThis.CustomEvent;
+  if (EventConstructor) {
+    target.dispatchEvent(new EventConstructor('api-from-cache'));
+  } else if (typeof globalThis.Event === 'function') {
+    target.dispatchEvent(new Event('api-from-cache'));
+  }
+}
+
 export class ApiClient {
   constructor(baseUrl = null) {
     if (window.CLINICASV_API_URL) {
@@ -14,6 +50,11 @@ export class ApiClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const { responseType, ...requestOptions } = options;
+    const method = (requestOptions.method || 'GET').toUpperCase();
+    if (method !== 'GET' && !connectivity.isOnline()) {
+      throw new OfflineError();
+    }
+
     const headers = {
       'Accept': 'application/json',
       ...requestOptions.headers
@@ -31,16 +72,26 @@ export class ApiClient {
     };
 
     try {
-      const response = await fetch(url, config);
+      let response;
+      try {
+        response = await fetch(url, config);
+      } catch (error) {
+        if (error instanceof TypeError && !connectivity.isOnline()) {
+          throw new OfflineError();
+        }
+        throw error;
+      }
+
+      notifyCachedResponse(response);
 
       if (!response.ok) {
         const errorData = await response.text();
-        throw new Error(errorData || `Error HTTP: ${response.status}`);
+        throw new Error(messageFromErrorResponse(errorData, response.status));
       }
 
       if (response.status === 204) return null;
 
-      const contentType = response.headers.get('content-type');
+      const contentType = response.headers?.get?.('content-type');
       if (responseType === 'blob' || (contentType && contentType.includes('application/pdf'))) {
         return await response.blob();
       }
@@ -65,6 +116,7 @@ export class ApiClient {
   async getWithTotal(endpoint) {
     const url = `${this.baseUrl}${endpoint}`;
     const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+    notifyCachedResponse(response);
     if (!response.ok) throw new Error('Error al obtener datos');
     
     const total = response.headers.get('X-Total-Count');

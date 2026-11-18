@@ -8,7 +8,7 @@
  */
 
 
-const VERSION = 'clinicasv-v1.0.7';
+const VERSION = 'clinicasv-v1.0.9';
 const SHELL_CACHE = `${VERSION}-shell`;
 const API_CACHE = `${VERSION}-api`;
 const ASSET_CACHE = `${VERSION}-assets`;
@@ -28,6 +28,7 @@ const APP_SHELL = [
   './src/styles/components/ui-input.css',
   './src/styles/components/ui-select.css',
   './src/styles/components/ui-confirm.css',
+  './src/styles/components/ui-connection-status.css',
 
   // --- Estilos de Vistas (Nuevos) ---
   './src/styles/views/view-login.css',
@@ -56,9 +57,11 @@ const APP_SHELL = [
   './src/control/consulta-service.js',
   './src/control/examen-service.js',
   './src/control/paso-service.js',
+  './src/control/offline-error.js',
   
   // --- Capa State ---
   './src/state/session-store.js',
+  './src/state/connectivity.js',
   
   // --- Capa Boundary (Layout y Componentes) ---
   './src/boundary/layout/app-root.js',
@@ -66,6 +69,7 @@ const APP_SHELL = [
   './src/boundary/components/ui-input.js',
   './src/boundary/components/ui-select.js',
   './src/boundary/components/ui-confirm.js',
+  './src/boundary/components/ui-connection-status.js',
   
   // --- Capa Boundary (Vistas) ---
   './src/boundary/views/view-login.js',
@@ -127,7 +131,7 @@ async function cacheFirst(request, cacheName) {
     return response;
   } catch (err) {
     if (request.mode === 'navigate') {
-      const fallback = await caches.match('./index.html');
+      const fallback = await caches.match(new URL('./index.html', self.registration.scope));
       if (fallback) return fallback;
     }
     return new Response('Offline', { status: 503, statusText: 'Offline' });
@@ -138,13 +142,27 @@ async function networkFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
     const response = await fetch(request);
-    if (response && response.status === 200) cache.put(request, response.clone());
+    if (response && response.status === 200) {
+      try {
+        await cache.put(request, response.clone());
+      } catch (error) {
+        console.warn('[SW] No se pudo guardar la respuesta de API en caché:', error);
+      }
+    }
     return response;
   } catch (err) {
     const cached = await cache.match(request);
-    if (cached) return cached;
+    if (cached) {
+      const headers = new Headers(cached.headers);
+      headers.set('X-From-Cache', 'true');
+      return new Response(cached.body, {
+        status: cached.status,
+        statusText: cached.statusText,
+        headers
+      });
+    }
     return new Response(
-      JSON.stringify({ error: 'offline', message: 'Sin conexión' }),
+      JSON.stringify({ error: 'offline' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
   }

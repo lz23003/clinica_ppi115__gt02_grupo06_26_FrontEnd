@@ -7,7 +7,10 @@ const suites = {
     './unit/state.test.js',
     './unit/entity.test.js',
     './unit/control.test.js',
-    './unit/registro-paso.test.js'
+    './unit/registro-paso.test.js',
+    './unit/connectivity.test.js',
+    './unit/offline-error.test.js',
+    './unit/api-client.test.js'
   ],
   integration: ['./integration/flujo-auth.test.js']
 };
